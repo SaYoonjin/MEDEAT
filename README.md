@@ -1,4 +1,6 @@
 # 🥗 MEDEAT (메딧)
+## 📊 Presentation
+- [MEDEAT 발표 자료 (PPT)](https://github.com/SaYoonjin/medeat/releases)
 
 AI 기반 식단 · 복약 통합 건강 관리 플랫폼
 
