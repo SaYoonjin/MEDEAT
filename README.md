@@ -89,7 +89,7 @@ AI 이미지 인식 + 공공 데이터 결합한 하이브리드 설계
 실무 지향적인 REST / WebSocket / AI 연동 경험
 
 ## 📂 Project Structure
-<img width="821" height="110" alt="image" src="https://github.com/user-attachments/assets/31a89394-5b91-454e-b9b5-1af841faca54" />
+<img width="132" height="130" alt="image" src="https://github.com/user-attachments/assets/15b29322-5836-455c-85b5-278fce3a992d" />
 
 
 ## 📌 Summary
