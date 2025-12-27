@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.food.dao.FoodDao">
+
+    <!-- 0. 기본 검색 -->
+    <select id="search" resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            food_id AS foodId,
+            name,
+            calorie,
+            carb,
+            protein,
+            fat,
+            sodium,
+            sugar,
+            source,
+            food_type AS foodType
+        FROM food
+        WHERE name LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY name
+        LIMIT 50
+    </select>
+
+    <!-- 1. 저칼로리 (실제 식사/반찬 위주) -->
+    <select id="findLowCalorieFoods" resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            food_id AS foodId,
+            name,
+            calorie,
+            carb,
+            protein,
+            fat,
+            sodium,
+            sugar,
+            source,
+            food_type AS foodType
+        FROM food
+        WHERE calorie IS NOT NULL
+          AND calorie &lt;= 200
+          AND (fat IS NULL OR fat &lt;= 5)
+          AND (protein IS NULL OR protein &gt;= 5)
+          -- 타입 필터 (진짜 식사/반찬 느낌 나는 것들)
+          AND (
+                food_type IS NULL
+             OR food_type IN ('MEAL','FOOD_DB','PRODUCT_DB','UNKNOWN')
+          )
+          -- 보충제/젤리/스낵류 제거
+          AND name NOT LIKE '%젤리%'
+          AND name NOT LIKE '%콜라겐%'
+          AND name NOT LIKE '%영양제%'
+          AND name NOT LIKE '%보충제%'
+          AND name NOT LIKE '%구미%'
+          AND name NOT LIKE '%스틱%'
+          AND name NOT LIKE '%타블렛%'
+          AND name NOT LIKE '%캡슐%'
+        ORDER BY calorie ASC, protein DESC
+        LIMIT 30
+    </select>
+
+    <!-- 2. 대체 음식 (고칼로리 메뉴 대신 쓸 수 있는 비교적 건강한 식사/반찬) -->
+    <select id="findSubstitutes" resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            food_id AS foodId,
+            name,
+            calorie,
+            carb,
+            protein,
+            fat,
+            sodium,
+            sugar,
+            source,
+            food_type AS foodType
+        FROM food
+        WHERE calorie IS NOT NULL
+          AND calorie BETWEEN 80 AND 450
+          AND protein IS NOT NULL
+          AND protein &gt;= 8
+          AND (fat IS NULL OR fat &lt;= 15)
+          AND (
+                food_type IS NULL
+             OR food_type IN ('MEAL','FOOD_DB','PRODUCT_DB','UNKNOWN')
+          )
+          -- 새우/대게 등은 서비스단에서도 한 번 더 중복 제거
+          -- 보충제/간식류 이름 필터
+          AND name NOT LIKE '%젤리%'
+          AND name NOT LIKE '%콜라겐%'
+          AND name NOT LIKE '%영양제%'
+          AND name NOT LIKE '%보충제%'
+          AND name NOT LIKE '%구미%'
+          AND name NOT LIKE '%스틱%'
+          AND name NOT LIKE '%타블렛%'
+          AND name NOT LIKE '%캡슐%'
+          AND name NOT LIKE '%바%'
+          AND name NOT LIKE '%쿠키%'
+          AND name NOT LIKE '%과자%'
+          AND name NOT LIKE '%스낵%'
+          AND name NOT LIKE '%케이크%'
+          AND name NOT LIKE '%호빵%'
+          AND name NOT LIKE '%교자%'
+          AND name NOT LIKE '%만두%'
+          AND name NOT LIKE '%도넛%'
+          AND name NOT LIKE '%와플%'
+          AND name NOT LIKE '%파이%'
+          AND name NOT LIKE '%베이글%'
+        ORDER BY calorie ASC, protein DESC
+        LIMIT 30
+    </select>
+
+    <!-- 3. 고단백 (지방은 서비스에서 한번 더 필터링) -->
+    <select id="findHighProteinLowFat" resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            food_id AS foodId,
+            name,
+            calorie,
+            carb,
+            protein,
+            fat,
+            sodium,
+            sugar,
+            source,
+            food_type AS foodType
+        FROM food
+        WHERE protein IS NOT NULL
+          AND protein &gt;= 10
+          AND (
+                food_type IS NULL
+             OR food_type IN ('MEAL','FOOD_DB','PRODUCT_DB','UNKNOWN')
+          )
+          AND name NOT LIKE '%젤리%'
+          AND name NOT LIKE '%콜라겐%'
+          AND name NOT LIKE '%영양제%'
+          AND name NOT LIKE '%보충제%'
+          AND name NOT LIKE '%구미%'
+          AND name NOT LIKE '%스틱%'
+          AND name NOT LIKE '%타블렛%'
+          AND name NOT LIKE '%캡슐%'
+        ORDER BY protein DESC, calorie ASC
+        LIMIT 30
+    </select>
+
+    <!-- 4. 저탄수 (매크로 교정용) -->
+    <select id="findLowCarbFoods" resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            food_id AS foodId,
+            name,
+            calorie,
+            carb,
+            protein,
+            fat,
+            sodium,
+            sugar,
+            source,
+            food_type AS foodType
+        FROM food
+        WHERE carb IS NOT NULL
+          AND carb &lt;= 20
+          AND (calorie IS NULL OR calorie &lt;= 500)
+          AND (fat IS NULL OR fat &lt;= 20)
+          AND (
+                food_type IS NULL
+             OR food_type IN ('MEAL','FOOD_DB','PRODUCT_DB','UNKNOWN')
+          )
+          AND name NOT LIKE '%젤리%'
+          AND name NOT LIKE '%콜라겐%'
+          AND name NOT LIKE '%영양제%'
+          AND name NOT LIKE '%보충제%'
+          AND name NOT LIKE '%구미%'
+          AND name NOT LIKE '%스틱%'
+          AND name NOT LIKE '%타블렛%'
+          AND name NOT LIKE '%캡슐%'
+          AND name NOT LIKE '%바%'
+          AND name NOT LIKE '%쿠키%'
+          AND name NOT LIKE '%과자%'
+          AND name NOT LIKE '%스낵%'
+        ORDER BY carb ASC, calorie ASC
+        LIMIT 30
+    </select>
+
+    <!-- 5. 저지방 (0kcal 음료 제거 + 식사 느낌 위주) -->
+    <select id="findLowFatFoods" resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            food_id AS foodId,
+            name,
+            calorie,
+            carb,
+            protein,
+            fat,
+            sodium,
+            sugar,
+            source,
+            food_type AS foodType
+        FROM food
+        WHERE fat IS NOT NULL
+          AND fat &lt;= 5
+          AND calorie IS NOT NULL
+          AND calorie BETWEEN 50 AND 500
+          AND (
+                food_type IS NULL
+             OR food_type IN ('MEAL','FOOD_DB','PRODUCT_DB','UNKNOWN')
+          )
+          AND name NOT LIKE '%젤리%'
+          AND name NOT LIKE '%콜라겐%'
+          AND name NOT LIKE '%영양제%'
+          AND name NOT LIKE '%보충제%'
+          AND name NOT LIKE '%구미%'
+          AND name NOT LIKE '%스틱%'
+          AND name NOT LIKE '%타블렛%'
+          AND name NOT LIKE '%캡슐%'
+          AND name NOT LIKE '%바%'
+          AND name NOT LIKE '%쿠키%'
+          AND name NOT LIKE '%과자%'
+          AND name NOT LIKE '%스낵%'
+        ORDER BY fat ASC, calorie ASC
+        LIMIT 30
+    </select>
+
+    <!-- 6. 건강 대체식 (대체 음식과 비슷한 기준) -->
+    <select id="findHealthyAlternatives" resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            food_id AS foodId,
+            name,
+            calorie,
+            carb,
+            protein,
+            fat,
+            sodium,
+            sugar,
+            source,
+            food_type AS foodType
+        FROM food
+        WHERE calorie IS NOT NULL
+          AND calorie BETWEEN 80 AND 450
+          AND protein IS NOT NULL
+          AND protein &gt;= 8
+          AND (fat IS NULL OR fat &lt;= 15)
+          AND (
+                food_type IS NULL
+             OR food_type IN ('MEAL','FOOD_DB','PRODUCT_DB','UNKNOWN')
+          )
+          AND name NOT LIKE '%젤리%'
+          AND name NOT LIKE '%콜라겐%'
+          AND name NOT LIKE '%영양제%'
+          AND name NOT LIKE '%보충제%'
+          AND name NOT LIKE '%구미%'
+          AND name NOT LIKE '%스틱%'
+          AND name NOT LIKE '%타블렛%'
+          AND name NOT LIKE '%캡슐%'
+          AND name NOT LIKE '%바%'
+          AND name NOT LIKE '%쿠키%'
+          AND name NOT LIKE '%과자%'
+          AND name NOT LIKE '%스낵%'
+          AND name NOT LIKE '%케이크%'
+          AND name NOT LIKE '%호빵%'
+          AND name NOT LIKE '%교자%'
+          AND name NOT LIKE '%만두%'
+          AND name NOT LIKE '%도넛%'
+          AND name NOT LIKE '%와플%'
+          AND name NOT LIKE '%파이%'
+          AND name NOT LIKE '%베이글%'
+        ORDER BY calorie ASC, protein DESC
+        LIMIT 30
+    </select>
+
+    <!-- 7. 기간 동안 유저가 먹은 고칼로리 음식/음료 -->
+    <select id="findHighCalorieFoodsByUserRange"
+            resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            f.food_id AS foodId,
+            f.name,
+            f.calorie,
+            f.carb,
+            f.protein,
+            f.fat,
+            f.sodium,
+            f.sugar,
+            f.source,
+            f.food_type AS foodType
+        FROM diet_item di
+        JOIN diet_log dl ON di.diet_id = dl.diet_id
+        LEFT JOIN food f ON di.food_id = f.food_id
+        WHERE dl.user_id = #{userId}
+          AND dl.log_date BETWEEN #{startDate} AND #{endDate}
+          AND di.calorie &gt;= #{minCalorie}
+          AND f.food_id IS NOT NULL
+        ORDER BY di.calorie DESC
+        LIMIT 30
+    </select>
+
+    <!-- 8. 같은 타입(DRINK/FOOD)에서 더 저칼로리 대체 음식 찾기 -->
+    <select id="findLowerKcalAlternativeByType"
+            resultType="com.medeat.food.dto.FoodDto">
+        SELECT
+            food_id AS foodId,
+            name,
+            calorie,
+            carb,
+            protein,
+            fat,
+            sodium,
+            sugar,
+            source,
+            food_type AS foodType
+        FROM food
+        <where>
+            calorie &lt;= #{maxCalorie}
+            <if test="keyword != null and keyword != ''">
+                AND name NOT LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+
+            <choose>
+                <!-- 음료 대체: DRINK만 -->
+                <when test="type == 'DRINK'">
+                    AND food_type = 'DRINK'
+                </when>
+                <!-- 음식 대체: 음료/보충제는 제외 -->
+                <otherwise>
+                    AND (
+                           food_type IS NULL
+                        OR food_type NOT IN ('DRINK','SUPP')
+                    )
+                </otherwise>
+            </choose>
+        </where>
+        ORDER BY calorie ASC
+        LIMIT 20
+    </select>
+
+</mapper>

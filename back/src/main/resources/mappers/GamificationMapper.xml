@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.gamification.dao.GamificationDao">
+
+    <!-- user_progress -->
+    <select id="selectUserProgress" resultType="map">
+        SELECT user_id, total_xp, level, master_xp
+        FROM user_progress
+        WHERE user_id = #{userId}
+    </select>
+
+    <insert id="upsertUserProgress">
+        INSERT INTO user_progress (user_id, total_xp, level, master_xp)
+        VALUES (#{userId}, #{deltaXp}, #{newLevel}, #{deltaMasterXp})
+        ON DUPLICATE KEY UPDATE
+            total_xp = total_xp + VALUES(total_xp),
+            level = VALUES(level),
+            master_xp = master_xp + VALUES(master_xp)
+    </insert>
+
+    <!-- daily_xp -->
+    <select id="selectTodayXp" resultType="int">
+        SELECT COALESCE(xp_sum, 0)
+        FROM daily_xp
+        WHERE user_id = #{userId} AND day = #{day}
+    </select>
+
+    <insert id="upsertDailyXp">
+        INSERT INTO daily_xp (user_id, day, xp_sum)
+        VALUES (#{userId}, #{day}, #{delta})
+        ON DUPLICATE KEY UPDATE xp_sum = xp_sum + VALUES(xp_sum)
+    </insert>
+
+    <!-- xp_log -->
+    <insert id="insertXpLog">
+        INSERT INTO xp_log (user_id, action_type, ref_id, xp, earned_date)
+        VALUES (#{userId}, #{actionType}, #{refId}, #{xp}, #{day})
+    </insert>
+    
+    <select id="countXpLogByActionDate" resultType="int">
+	    SELECT COUNT(*)
+	    FROM xp_log
+	    WHERE user_id = #{userId}
+	      AND action_type = #{actionType}
+	      AND earned_date = #{day}
+	</select>
+
+    <!-- user_streak -->
+    <select id="selectUserStreak" resultType="map">
+        SELECT user_id, current_streak, last_action_date
+        FROM user_streak
+        WHERE user_id = #{userId}
+    </select>
+
+    <insert id="upsertUserStreak">
+        INSERT INTO user_streak (user_id, current_streak, last_action_date)
+        VALUES (#{userId}, #{currentStreak}, #{lastActionDate})
+        ON DUPLICATE KEY UPDATE
+            current_streak = VALUES(current_streak),
+            last_action_date = VALUES(last_action_date)
+    </insert>
+
+</mapper>

@@ -1,0 +1,48 @@
+@import './base.css';
+
+/* ==============================
+   Vue 루트 (#app) 기본 구조
+   ============================== */
+#app {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* ==============================
+   링크 스타일
+   ============================== */
+a {
+  text-decoration: none;
+  color: var(--color-primary);
+  transition: 0.2s;
+}
+
+a:hover {
+  color: var(--color-primary-hover);
+}
+
+/* ==============================
+   전역 유틸리티 스타일
+   ============================== */
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: inherit;
+}
+
+/* 화면 전체를 강제로 flex로 가운데 정렬하던 기본 템플릿 제거 */
+@media (min-width: 1024px) {
+  body {
+    display: block;     /* 🔥 전체 flex-center 제거 */
+  }
+
+  #app {
+    display: block;     /* 🔥 그리드도 제거 */
+    padding: 0;
+  }
+}

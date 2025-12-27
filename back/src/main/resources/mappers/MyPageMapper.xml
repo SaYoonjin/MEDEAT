@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.mypage.dao.MyPageDao">
+
+    <!-- =========================
+         조회
+    ========================= -->
+
+    <!-- 내가 쓴 글 -->
+    <select id="selectMyPosts" resultType="com.medeat.community.dto.PostDto">
+        SELECT p.*
+        FROM post p
+        WHERE p.user_id = #{userId}
+          AND p.is_deleted = 0
+        ORDER BY p.created_at DESC
+    </select>
+
+    <!-- ✅ 내가 저장한 글 (PostDto로 통일) -->
+    <select id="selectMyScraps" resultType="com.medeat.community.dto.PostDto">
+        SELECT p.*
+        FROM post_scrap s
+        JOIN post p ON s.post_id = p.post_id
+        WHERE s.user_id = #{userId}
+          AND p.is_deleted = 0
+        ORDER BY s.created_at DESC
+    </select>
+
+    <!-- 내가 좋아요한 글 (프리뷰) -->
+    <select id="selectMyLikes" resultType="com.medeat.community.dto.MyPostPreviewDto">
+        SELECT
+            p.post_id    AS postId,
+            p.title      AS title,
+            p.created_at AS createdAt
+        FROM post_like l
+        JOIN post p ON l.post_id = p.post_id
+        WHERE l.user_id = #{userId}
+          AND p.is_deleted = 0
+        ORDER BY l.created_at DESC
+    </select>
+
+
+    <!-- =========================
+         회원 탈퇴용 삭제(정리 삭제)
+         - 서비스에서 "순서대로" 호출됨
+         - FK 충돌 방지용으로 '내 글에 달린 것'도 먼저 정리
+    ========================= -->
+
+    <!-- 1) COMMUNITY: 내가 누른 좋아요/스크랩/댓글 -->
+    <delete id="deletePostLikesByUser">
+        DELETE FROM post_like
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deletePostScrapsByUser">
+        DELETE FROM post_scrap
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteCommentsByUser">
+        DELETE FROM comment
+        WHERE user_id = #{userId}
+    </delete>
+
+    <!-- 1-2) 내가 쓴 글에 달린 좋아요/스크랩/댓글 -->
+    <delete id="deletePostLikesOnUserPosts">
+        DELETE FROM post_like
+        WHERE post_id IN (
+            SELECT post_id FROM post WHERE user_id = #{userId}
+        )
+    </delete>
+
+    <delete id="deletePostScrapsOnUserPosts">
+        DELETE FROM post_scrap
+        WHERE post_id IN (
+            SELECT post_id FROM post WHERE user_id = #{userId}
+        )
+    </delete>
+
+    <delete id="deleteCommentsOnUserPosts">
+        DELETE FROM comment
+        WHERE post_id IN (
+            SELECT post_id FROM post WHERE user_id = #{userId}
+        )
+    </delete>
+
+    <!-- 1-3) 내가 쓴 글 삭제 -->
+    <delete id="deletePostsByUser">
+        DELETE FROM post
+        WHERE user_id = #{userId}
+    </delete>
+
+
+    <!-- 2) DIET -->
+    <delete id="deleteDietItemsByUser">
+        DELETE FROM diet_item
+        WHERE diet_id IN (
+            SELECT diet_id FROM diet_log WHERE user_id = #{userId}
+        )
+    </delete>
+
+    <delete id="deleteDietLogsByUser">
+        DELETE FROM diet_log
+        WHERE user_id = #{userId}
+    </delete>
+
+
+    <!-- 3) MED / DISEASE / MED_INFO -->
+    <delete id="deleteMedicationLogsByUser">
+        DELETE FROM medication_log
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteMedicationsByUser">
+        DELETE FROM medication
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteMedInfoByUser">
+        DELETE FROM med_info
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteUserDiseaseByUser">
+        DELETE FROM user_disease
+        WHERE user_id = #{userId}
+    </delete>
+
+
+    <!-- 4) CHALLENGE -->
+    <delete id="deleteChallengeLogsByUser">
+        DELETE FROM challenge_log
+        WHERE user_challenge_id IN (
+            SELECT user_challenge_id FROM user_challenge WHERE user_id = #{userId}
+        )
+    </delete>
+
+    <delete id="deleteUserChallengesByUser">
+        DELETE FROM user_challenge
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteChallengeChatByUser">
+        DELETE FROM challenge_chat_message
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteChallengesByUser">
+        DELETE FROM challenge
+        WHERE user_id = #{userId}
+    </delete>
+
+
+    <!-- 5) NOTIFICATION / PUSH / BADGE -->
+    <delete id="deleteNotificationsByUser">
+        DELETE FROM notification
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deletePushSubscriptionsByUser">
+        DELETE FROM push_subscription
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteUserBadgesByUser">
+        DELETE FROM user_badge
+        WHERE user_id = #{userId}
+    </delete>
+
+
+    <!-- 6) GAMIFICATION -->
+    <delete id="deleteDailyXpByUser">
+        DELETE FROM daily_xp
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteXpLogByUser">
+        DELETE FROM xp_log
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteUserStreakByUser">
+        DELETE FROM user_streak
+        WHERE user_id = #{userId}
+    </delete>
+
+    <delete id="deleteUserProgressByUser">
+        DELETE FROM user_progress
+        WHERE user_id = #{userId}
+    </delete>
+
+</mapper>

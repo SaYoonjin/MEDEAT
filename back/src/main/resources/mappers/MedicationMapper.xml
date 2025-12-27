@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.medical.dao.MedicationDao">
+
+    <!-- 1. 사용자별 약 리스트 -->
+    <select id="selectByUser"
+            parameterType="long"
+            resultType="com.medeat.medical.dto.MedicationDto">
+        SELECT
+            medication_id AS medicationId,
+            user_id       AS userId,
+            item_seq          AS itemSeq,
+            drug_name     AS drugName,
+            ingredient,
+            dose,
+            intake_time   AS intakeTime,
+            interval_hour AS intervalHour,
+            memo,
+            daily_count   AS dailyCount,
+            recommended
+        FROM medication
+        WHERE user_id = #{userId}
+        ORDER BY medication_id DESC
+    </select>
+
+    <!-- 2. 약 상세 조회 -->
+    <select id="selectById"
+            parameterType="long"
+            resultType="com.medeat.medical.dto.MedicationDto">
+        SELECT
+            medication_id AS medicationId,
+            user_id       AS userId,
+            item_seq          AS itemSeq,
+            drug_name     AS drugName,
+            ingredient,
+            dose,
+            intake_time   AS intakeTime,
+            interval_hour AS intervalHour,
+            memo,
+            daily_count   AS dailyCount,
+            recommended
+        FROM medication
+        WHERE medication_id = #{medicationId}
+    </select>
+
+    <!-- 3. 약 등록 -->
+    <insert id="insertMedication"
+            parameterType="com.medeat.medical.dto.MedicationDto">
+        INSERT INTO medication (
+		    user_id,
+		    item_seq,          -- ⭐ 추가
+		    drug_name,
+		    ingredient,
+		    dose,
+		    intake_time,
+		    interval_hour,
+		    memo,
+		    daily_count,
+		    recommended
+		)
+		VALUES (
+		    #{userId},
+		    #{itemSeq},        -- ⭐ 추가
+		    #{drugName},
+		    #{ingredient},
+		    #{dose},
+		    #{intakeTime},
+		    #{intervalHour},
+		    #{memo},
+		    #{dailyCount},
+		    #{recommended}
+		)
+
+    </insert>
+
+    <!-- 4. 오늘 복용한 약 기록 조회 -->
+    <select id="getTodayLogs"
+            parameterType="long"
+            resultType="com.medeat.medical.dto.MedicationLogDto">
+        SELECT
+            log_id        AS logId,
+            medication_id AS medicationId,
+            user_id       AS userId,
+            taken_index   AS takenIndex,
+            taken_at      AS takenAt
+        FROM medication_log
+        WHERE user_id = #{userId}
+          AND DATE(taken_at) = CURDATE()
+        ORDER BY taken_at ASC
+    </select>
+
+    <!-- 5. 약 복용 기록 저장 -->
+    <insert id="insertLog"
+            parameterType="com.medeat.medical.dto.MedicationLogDto">
+        INSERT INTO medication_log (
+            user_id,
+            medication_id,
+            taken_index
+        )
+        VALUES (
+            #{userId},
+            #{medicationId},
+            #{takenIndex}
+        )
+    </insert>
+
+    <!-- 6. 약 수정 -->
+    <update id="updateMedication"
+            parameterType="com.medeat.medical.dto.MedicationDto">
+        UPDATE medication
+        SET drug_name     = #{drugName},
+            ingredient    = #{ingredient},
+            dose          = #{dose},
+            intake_time   = #{intakeTime},
+            interval_hour = #{intervalHour},
+            memo          = #{memo},
+            daily_count   = #{dailyCount},
+            recommended   = #{recommended}
+        WHERE medication_id = #{medicationId}
+    </update>
+
+    <!-- 7. 약 삭제 -->
+    <delete id="deleteMedication"
+            parameterType="long">
+        DELETE FROM medication
+        WHERE medication_id = #{medicationId}
+    </delete>
+
+    <!-- 8. 전체 약 조회 (알림 스케줄러용) -->
+    <select id="selectAll"
+            resultType="com.medeat.medical.dto.MedicationDto">
+        SELECT
+		    medication_id AS medicationId,
+		    user_id       AS userId,
+		    item_seq      AS itemSeq,     -- ⭐ 추가
+		    drug_name     AS drugName,
+		    ingredient,
+		    dose,
+		    intake_time   AS intakeTime,
+		    interval_hour AS intervalHour,
+		    memo,
+		    daily_count   AS dailyCount,
+		    recommended
+		FROM medication
+        ORDER BY medication_id ASC
+    </select>
+
+    <!-- 9. 오늘 특정 약의 복용 기록 -->
+    <select id="getTodayLogsByMedication"
+            parameterType="long"
+            resultType="com.medeat.medical.dto.MedicationLogDto">
+        SELECT
+            log_id        AS logId,
+            medication_id AS medicationId,
+            user_id       AS userId,
+            taken_index   AS takenIndex,
+            taken_at      AS takenAt
+        FROM medication_log
+        WHERE medication_id = #{medicationId}
+          AND DATE(taken_at) = CURDATE()
+        ORDER BY taken_index ASC
+    </select>
+
+    <!-- 10. (옵션) 의약품 마스터 검색
+         → 이건 MedicationDto 필드랑 맞는지 보고 나중에 따로 DTO 분리해도 됨 -->
+    <select id="searchByKeyword"
+            parameterType="string"
+            resultType="com.medeat.medical.dto.MedicationDto">
+        SELECT
+            medication_id,
+            item_seq,       -- 낱알식별 코드 혹은 의약품 코드
+            item_name,      -- 제품명
+            entp_name,      -- 회사명
+            drug_shape,     -- 모양
+            color_class1,   -- 색상
+            print_front     -- 앞면 각인
+        FROM medication_master
+        WHERE item_name LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY item_name
+        LIMIT 30
+    </select>  
+    
+    <!-- 🔍 특정 사용자의 동일 이름 약 존재 여부 확인 -->
+	<select id="existsByUserAndName" parameterType="map">
+	    SELECT COUNT(*)
+	    FROM medication
+	    WHERE user_id = #{userId}
+	      AND drug_name = #{drugName}
+	</select>
+
+	<select id="existsByUserAndNameExcludingId" parameterType="map">
+	    SELECT COUNT(*)
+	    FROM medication
+	    WHERE user_id = #{userId}
+	      AND drug_name = #{drugName}
+	      AND medication_id != #{medicationId}
+	</select>
+	
+    <!-- 🔥 기간별 복약 로그 조회 (PDF / 리포트용) -->
+	<select id="selectLogsByPeriod"
+	        parameterType="map"
+	        resultType="com.medeat.medical.dto.MedicationLogDto">
+	
+	    SELECT
+	        log_id        AS logId,
+	        medication_id AS medicationId,
+	        user_id       AS userId,
+	        taken_index   AS takenIndex,
+	        taken_at      AS takenAt
+	    FROM medication_log
+	    WHERE user_id = #{userId}
+	      AND DATE(taken_at) BETWEEN #{startDate} AND #{endDate}
+	    ORDER BY taken_at ASC
+	</select>
+	
+	    
+
+</mapper>

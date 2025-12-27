@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.chat.dao.ChatDao">
+
+    <insert id="insertMessage">
+        INSERT INTO challenge_chat_message (
+            challenge_id,
+            user_id,
+            nickname,
+            content,
+            created_at
+        ) VALUES (
+            #{challengeId},
+            #{userId},
+            #{nickname},
+            #{content},
+            NOW()
+        )
+    </insert>
+
+    <select id="selectByChallengeId"
+            resultType="com.medeat.chat.dto.ChatMessageDto">
+        SELECT
+            challenge_id AS challengeId,
+            user_id      AS userId,
+            nickname,
+            content,
+            created_at   AS createdAt
+        FROM challenge_chat_message
+        WHERE challenge_id = #{challengeId}
+        ORDER BY created_at ASC
+    </select>
+
+</mapper>

@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.diet.dao.DietDao">
+
+    <resultMap id="dietMap" type="com.medeat.diet.dto.DietLogDto">
+        <id     property="dietId"      column="diet_id"/>
+        <result property="userId"      column="user_id"/>
+        <result property="logDate"     column="log_date"/>
+        <result property="mealTime"    column="meal_time"/>
+        <result property="memo"        column="memo"/>
+        <result property="photoPath"   column="photo_path"/>
+        <result property="totalCalorie" column="total_calorie"/>
+        <result property="totalCarb"    column="total_carb"/>
+        <result property="totalProtein" column="total_protein"/>
+        <result property="totalFat"     column="total_fat"/>
+
+        <collection property="items" ofType="com.medeat.diet.dto.DietItemDto">
+            <id     property="itemId"   column="item_id"/>
+            <result property="foodId"   column="food_id"/>
+            <result property="foodName" column="food_name"/>
+            <result property="gram"     column="gram"/>
+            <result property="calorie"  column="calorie"/>
+            <result property="carb"     column="carb"/>
+            <result property="protein"  column="protein"/>
+            <result property="fat"      column="fat"/>
+        </collection>
+    </resultMap>
+
+    <select id="selectDietLog" parameterType="long" resultType="com.medeat.diet.dto.DietLogDto">
+        SELECT
+            diet_id       AS dietId,
+            user_id       AS userId,
+            DATE_FORMAT(log_date, '%Y-%m-%d') AS logDate,
+            meal_time     AS mealTime,
+            memo,
+            total_calorie AS totalCalorie,
+            total_carb    AS totalCarb,
+            total_protein AS totalProtein,
+            total_fat     AS totalFat,
+            photo_path    AS photoPath
+        FROM diet_log
+        WHERE diet_id = #{dietId}
+    </select>
+
+    <select id="selectDietItems" parameterType="long" resultType="com.medeat.diet.dto.DietItemDto">
+        SELECT
+            item_id   AS itemId,
+            diet_id   AS dietId,
+            food_id   AS foodId,
+            food_name AS foodName,
+            gram,
+            calorie,
+            carb,
+            protein,
+            fat
+        FROM diet_item
+        WHERE diet_id = #{dietId}
+        ORDER BY item_id
+    </select>
+    
+    <select id="getItemById" resultType="com.medeat.diet.dto.DietItemDto">
+        SELECT item_id AS itemId,
+               diet_id AS dietId,
+               calorie,
+               carb,
+               protein,
+               fat
+        FROM diet_item
+        WHERE item_id = #{itemId}
+    </select>
+
+    <select id="selectDietDetail" resultMap="dietMap">
+        SELECT
+            d.diet_id, d.user_id, DATE_FORMAT(d.log_date, '%Y-%m-%d') AS log_date,
+            d.meal_time, d.memo, d.photo_path, d.total_calorie, d.total_carb,
+            d.total_protein, d.total_fat,
+            i.item_id, i.food_id, i.food_name, i.gram, i.calorie, i.carb, i.protein, i.fat
+        FROM diet_log d
+        LEFT JOIN diet_item i ON d.diet_id = i.diet_id
+        WHERE d.diet_id = #{dietId} AND d.user_id = #{userId}
+    </select>
+
+    <insert id="insertDietLog" parameterType="com.medeat.diet.dto.DietLogDto" useGeneratedKeys="true" keyProperty="dietId">
+        INSERT INTO diet_log (
+            user_id, log_date, meal_time, memo,
+            total_calorie, total_carb, total_protein, total_fat, photo_path
+        ) VALUES (
+            #{userId}, #{logDate}, #{mealTime}, #{memo},
+            #{totalCalorie}, #{totalCarb}, #{totalProtein}, #{totalFat}, #{photoPath}
+        )
+    </insert>
+
+    <update id="updateDietLog" parameterType="com.medeat.diet.dto.DietLogDto">
+	    UPDATE diet_log
+	    SET log_date = #{logDate},
+	        meal_time = #{mealTime},
+	        memo = #{memo},
+	        total_calorie = #{totalCalorie},
+	        total_carb = #{totalCarb},
+	        total_protein = #{totalProtein},
+	        total_fat = #{totalFat},
+	        photo_path = #{photoPath}
+	    WHERE diet_id = #{dietId} AND user_id = #{userId}
+	</update>
+    <insert id="insertDietItem" parameterType="com.medeat.diet.dto.DietItemDto">
+        INSERT INTO diet_item (
+            diet_id, food_id, food_name, gram,
+            calorie, carb, protein, fat
+        ) VALUES (
+            #{dietId}, 
+            #{foodId, jdbcType=INTEGER}, 
+            #{foodName}, 
+            #{gram},
+            #{calorie}, 
+            #{carb}, 
+            #{protein}, 
+            #{fat}
+        )
+    </insert>
+
+    <delete id="deleteDietItems">
+        DELETE FROM diet_item WHERE diet_id = #{dietId}
+    </delete>
+
+    <delete id="deleteDiet">
+        DELETE FROM diet_log WHERE diet_id = #{dietId} AND user_id = #{userId}
+    </delete>
+    
+    <delete id="deleteItem">
+        DELETE FROM diet_item
+        WHERE item_id = #{itemId}
+          AND diet_id IN (SELECT diet_id FROM diet_log WHERE user_id = #{userId})
+    </delete>
+    
+    <update id="updateDietTotals">
+        UPDATE diet_log
+        SET total_calorie = #{cal}, total_carb = #{carb},
+            total_protein = #{protein}, total_fat = #{fat}
+        WHERE diet_id = #{dietId} AND user_id = #{userId}
+    </update>
+
+    <select id="selectDietListByDate" resultMap="dietMap">
+	    SELECT
+	        d.diet_id, 
+	        d.user_id, 
+	        DATE_FORMAT(d.log_date, '%Y-%m-%d') AS log_date,
+	        d.meal_time, 
+	        d.memo, 
+	        d.total_calorie, 
+	        d.total_carb, 
+	        d.total_protein,
+	        d.total_fat, 
+	        d.photo_path,
+	        i.item_id, 
+	        i.food_id, 
+	        i.food_name AS food_name,
+	        i.gram, 
+	        i.calorie, 
+	        i.carb, 
+	        i.protein, 
+	        i.fat
+	    FROM diet_log d
+	    LEFT JOIN diet_item i ON d.diet_id = i.diet_id
+	    WHERE d.user_id = #{userId} AND d.log_date = #{date}
+	    ORDER BY 
+	        CASE d.meal_time
+	            WHEN '아침' THEN 1 WHEN '점심' THEN 2 WHEN '저녁' THEN 3
+	            WHEN '간식' THEN 4 WHEN '야식' THEN 5 ELSE 99
+	        END,
+	        i.item_id ASC
+	</select>
+	
+    <select id="selectCalendarLogs" resultType="com.medeat.diet.dto.DietLogDto">
+        SELECT DATE_FORMAT(log_date, '%Y-%m-%d') AS logDate, meal_time AS mealTime
+        FROM diet_log
+        WHERE user_id = #{userId} AND log_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY log_date, meal_time
+    </select>
+    
+    <select id="selectLogsByPeriod" resultType="com.medeat.diet.dto.DietLogDto">
+        SELECT
+            diet_id AS dietId, user_id AS userId,
+            DATE_FORMAT(log_date, '%Y-%m-%d') AS logDate,
+            meal_time AS mealTime, memo, total_calorie AS totalCalorie,
+            total_carb AS totalCarb, total_protein AS totalProtein,
+            total_fat AS totalFat, photo_path AS photoPath
+        FROM diet_log
+        WHERE user_id = #{userId} AND log_date BETWEEN #{startDate} AND #{endDate}
+        ORDER BY log_date ASC,
+            CASE meal_time
+                WHEN '아침' THEN 1 WHEN '점심' THEN 2 WHEN '저녁' THEN 3
+                WHEN '간식' THEN 4 WHEN '야식' THEN 5 ELSE 99
+            END
+    </select>
+    
+    <select id="countMealsByDate" resultType="int">
+	    SELECT COUNT(DISTINCT meal_time)
+	    FROM diet_log
+	    WHERE user_id = #{userId}
+	      AND log_date = #{logDate}
+	</select>
+	
+	<select id="selectRecommendedFoods"
+	        resultType="com.medeat.food.dto.FoodDto">
+	    SELECT
+	        f.food_id        AS foodId,
+	        f.name           AS name,
+	        f.calorie        AS calorie,
+	        f.carb           AS carb,
+	        f.protein        AS protein,
+	        f.fat            AS fat
+	    FROM food f
+	    WHERE f.food_id NOT IN (
+	        SELECT DISTINCT di.food_id
+	        FROM diet_item di
+	        JOIN diet_log dl ON di.diet_id = dl.diet_id
+	        WHERE dl.user_id = #{userId}
+	          AND dl.log_date BETWEEN #{startDate} AND #{endDate}
+	    )
+	    ORDER BY RAND()
+	    LIMIT 9
+	</select>
+	
+    
+
+</mapper>

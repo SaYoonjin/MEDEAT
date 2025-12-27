@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.medical.dao.DrugInfoDao">
+
+    <!-- 단건 조회 -->
+    <select id="selectByItemSeq"
+            parameterType="long"
+            resultType="com.medeat.medical.dto.DrugInfoDto">
+        SELECT
+            item_seq AS itemSeq,
+            item_name AS itemName,
+            entp_name AS entpName,
+            ingr_name AS ingrName,
+            item_image AS itemImage,
+            efcy_qesitm AS efcyQesitm,
+            use_method_qesitm AS useMethodQesitm,
+            atpn_warn_qesitm AS atpnWarnQesitm,
+            atpn_qesitm AS atpnQesitm,
+            intrc_qesitm AS intrcQesitm,
+            se_qesitm AS seQesitm,
+            deposit_method_qesitm AS depositMethodQesitm,
+            drug_shape AS drugShape,
+            color_class1 AS colorClass1,
+            print_front AS printFront
+        FROM drug_info
+        WHERE item_seq = #{itemSeq}
+    </select>
+
+    <!-- ⭐ 여러 개 조회 (PDF / MEDI 분석용) -->
+    <select id="selectByItemSeqList"
+	        resultType="com.medeat.medical.dto.DrugInfoDto">
+	    SELECT
+	        item_seq AS itemSeq,
+	        item_name AS itemName,
+	        entp_name AS entpName,
+	        ingr_name AS ingrName,
+	        item_image AS itemImage,
+	        efcy_qesitm AS efcyQesitm,
+	        use_method_qesitm AS useMethodQesitm,
+	        atpn_warn_qesitm AS atpnWarnQesitm,
+	        drug_shape AS drugShape,
+	        color_class1 AS colorClass1,
+	        print_front AS printFront
+	    FROM drug_info
+	    WHERE item_seq IN
+	    <foreach collection="itemSeqList"
+	             item="id"
+	             open="("
+	             separator=","
+	             close=")">
+	        #{id}
+	    </foreach>
+	</select>
+
+
+    <!-- upsert -->
+    <insert id="upsertDrugInfo"
+	        parameterType="com.medeat.medical.dto.DrugInfoDto">
+	    INSERT INTO drug_info (
+	        item_seq, item_name, entp_name, ingr_name, item_image,
+	        efcy_qesitm, use_method_qesitm, atpn_warn_qesitm, atpn_qesitm,
+	        intrc_qesitm, se_qesitm, deposit_method_qesitm,
+	        drug_shape, color_class1, print_front
+	    ) VALUES (
+	        #{itemSeq}, #{itemName}, #{entpName}, #{ingrName}, #{itemImage},
+	        #{efcyQesitm}, #{useMethodQesitm}, #{atpnWarnQesitm}, #{atpnQesitm},
+	        #{intrcQesitm}, #{seQesitm}, #{depositMethodQesitm},
+	        #{drugShape}, #{colorClass1}, #{printFront}
+	    )
+	    ON DUPLICATE KEY UPDATE
+	        item_name = VALUES(item_name),
+	        entp_name = VALUES(entp_name),
+	        ingr_name = VALUES(ingr_name),
+	        item_image = VALUES(item_image),
+	        efcy_qesitm = VALUES(efcy_qesitm),
+	        use_method_qesitm = VALUES(use_method_qesitm),
+	        atpn_warn_qesitm = VALUES(atpn_warn_qesitm),
+	        atpn_qesitm = VALUES(atpn_qesitm),
+	        intrc_qesitm = VALUES(intrc_qesitm),
+	        se_qesitm = VALUES(se_qesitm),
+	        deposit_method_qesitm = VALUES(deposit_method_qesitm),
+	        drug_shape = VALUES(drug_shape),
+	        color_class1 = VALUES(color_class1),
+	        print_front = VALUES(print_front);
+	</insert>
+
+
+</mapper>

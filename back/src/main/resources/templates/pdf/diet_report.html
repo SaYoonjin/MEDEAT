@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>MEDEAT Diet Report</title>
+
+  <style>
+    @page { size: A4; margin: 15mm; }
+
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 11px;
+      color: #333;
+      line-height: 1.5;
+    }
+
+    /* 유틸리티 */
+    .w-100 { width: 100%; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .bold { font-weight: 700; }
+    .text-sm { font-size: 10px; color: #666; }
+    
+    /* Header */
+    .header {
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    .main-title {
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .sub-info {
+      font-size: 10px;
+      color: #64748b;
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 25px;
+      page-break-inside: avoid;
+    }
+    .section-header {
+      background: #f1f5f9;
+      padding: 8px 12px;
+      border-left: 4px solid #2563eb;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .box {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+      min-height: 50px;
+    }
+
+    /* Score */
+    .score-container { text-align: left; }
+    .score-val {
+      font-size: 40px;
+      font-weight: 900;
+      color: #2563eb;
+      margin-bottom: 5px;
+    }
+
+    /* ===== Progress Bar (가로형 막대 그래프) ===== */
+    .macro-row { 
+        margin-bottom: 15px; 
+    }
+    .macro-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+        font-weight: 700;
+        font-size: 12px;
+    }
+    .progress-bg {
+        background: #f1f5f9;
+        height: 12px;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+    }
+    .progress-bar { 
+        height: 100%; 
+        border-radius: 6px; 
+    }
+    
+    /* Colors */
+    .bg-carb { background: #fbbf24; }
+    .text-carb { color: #d97706; } /* 글자는 조금 더 진하게 */
+    
+    .bg-prot { background: #3b82f6; }
+    .text-prot { color: #2563eb; }
+    
+    .bg-fat  { background: #a855f7; }
+    .text-fat { color: #9333ea; }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    th, td {
+      padding: 6px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: center;
+    }
+    th { background: #f8fafc; }
+
+    /* Chart Image */
+    .chart-img {
+      width: 100%;
+      height: auto;
+      max-height: 350px;
+      object-fit: contain; 
+      display: block;
+    }
+
+    /* Food Card */
+    .food-container { width: 100%; font-size: 0; }
+    .food-card {
+      display: inline-block;
+      width: 32%;
+      margin-right: 1%;
+      margin-bottom: 10px;
+      padding: 10px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      vertical-align: top;
+      page-break-inside: avoid;
+      font-size: 11px;
+      box-sizing: border-box;
+    }
+    .food-card:nth-child(3n) { margin-right: 0; }
+
+    /* Page Break */
+    .page-break { page-break-before: always; }
+  </style>
+</head>
+
+<body>
+
+<div class="header">
+  <table class="w-100">
+    <tr>
+      <td style="border:none; text-align: left;">
+        <div class="main-title"
+             th:text="${mode == 'MEDI_EAT' ? 'MEDEAT MED REPORT' : 'MEDEAT EAT REPORT'}">
+          MEDEAT REPORT
+        </div>
+        <div class="sub-info">
+          분석 기간:
+          <span th:text="${startDate}">2025-01-01</span> ~
+          <span th:text="${endDate}">2025-01-31</span>
+        </div>
+      </td>
+      <td class="text-right" style="border:none;">
+        <div class="bold">
+          <!-- ✅ 여기만 수정: loginUser / user / security authentication 순서로 전부 커버 -->
+          <span th:text="${user != null ? (user.nickname != null and user.nickname != '' ? user.nickname : user.name) : 'GUEST'}">
+		    사용자
+		  </span>님
+
+        </div>
+        <div class="sub-info">
+          생성일:
+          <span th:text="${#dates.format(#dates.createNow(),'yyyy-MM-dd')}">2025-12-16</span>
+        </div>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-header">건강 점수</div>
+  <div class="box score-container">
+    <div class="score-val" th:text="${score != null ? score.value : 0}">0</div>
+    <ul class="text-sm" th:if="${score != null and score.reasons != null}" style="margin: 0; padding-left: 20px;">
+      <li th:each="r : ${score.reasons}" th:text="${r}">이유 텍스트</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">영양 비율</div>
+  <div class="box">
+    
+    <div class="macro-row">
+      <div class="macro-label">
+        <span class="text-carb">탄수화물</span>
+        <span th:text="${#numbers.formatInteger((periodSummary != null ? periodSummary.carbRatio : 0) * 100, 0)} + '%'">0%</span>
+      </div>
+      <div class="progress-bg">
+        <div class="progress-bar bg-carb"
+             th:style="'width:' + ${(periodSummary != null ? periodSummary.carbRatio : 0) * 100} + '%'"></div>
+      </div>
+    </div>
+
+    <div class="macro-row">
+      <div class="macro-label">
+        <span class="text-prot">단백질</span>
+        <span th:text="${#numbers.formatInteger((periodSummary != null ? periodSummary.proteinRatio : 0) * 100, 0)} + '%'">0%</span>
+      </div>
+      <div class="progress-bg">
+        <div class="progress-bar bg-prot"
+             th:style="'width:' + ${(periodSummary != null ? periodSummary.proteinRatio : 0) * 100} + '%'"></div>
+      </div>
+    </div>
+
+    <div class="macro-row">
+      <div class="macro-label">
+        <span class="text-fat">지방</span>
+        <span th:text="${#numbers.formatInteger((periodSummary != null ? periodSummary.fatRatio : 0) * 100, 0)} + '%'">0%</span>
+      </div>
+      <div class="progress-bg">
+        <div class="progress-bar bg-fat"
+             th:style="'width:' + ${(periodSummary != null ? periodSummary.fatRatio : 0) * 100} + '%'"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">일별 추이</div>
+  
+  <div class="box" style="margin-bottom: 10px;">
+    <img th:if="${chartDaily != null}"
+         th:src="${chartDaily}"
+         class="chart-img" alt="Daily Chart" />
+    <div th:unless="${chartDaily != null}" style="text-align:center; padding:20px; color:#aaa;">
+        차트 데이터가 없습니다.
+    </div>
+  </div>
+
+  <div class="box">
+    <table>
+      <thead>
+        <tr>
+          <th>날짜</th><th>Kcal</th><th>C</th><th>P</th><th>F</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="d : ${dailyChart}">
+          <td th:text="${d.date}"></td>
+          <td th:text="${d.totalKcal}"></td>
+          <td th:text="${d.totalCarb}"></td>
+          <td th:text="${d.totalProtein}"></td>
+          <td th:text="${d.totalFat}"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">식습관 패턴</div>
+  <div class="box" style="text-align: center;">
+    <div style="width: 50%; display: inline-block;">
+        <img th:if="${chartSnack != null}"
+             th:src="${chartSnack}"
+             class="chart-img" alt="Snack Chart" />
+    </div>
+    <div th:unless="${chartSnack != null}" style="padding:20px; color:#aaa;">
+        식습관 데이터가 없습니다.
+    </div>
+  </div>
+</div>
+
+<div class="page-break"></div>
+
+<div class="section">
+  <div class="section-header">추천 식단</div>
+  
+  <div class="food-container">
+    <div th:each="f : ${foods}" class="food-card">
+      <div class="bold" th:text="${f.name}" style="font-size: 12px; margin-bottom: 4px;">음식명</div>
+      <div style="color:#ef4444; font-weight:bold; margin-bottom: 4px;" 
+           th:text="${f.calorie} + ' kcal'">0 kcal</div>
+      <div class="text-sm" style="color:#555;">
+        C: <span th:text="${f.carb}">0</span>g /
+        P: <span th:text="${f.protein}">0</span>g /
+        F: <span th:text="${f.fat}">0</span>g
+      </div>
+    </div>
+    
+    <div th:if="${foods == null or foods.isEmpty()}" class="box" style="text-align: center;">
+        추천 식단 데이터가 없습니다.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

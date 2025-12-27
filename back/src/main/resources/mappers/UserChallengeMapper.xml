@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.challenge.dao.UserChallengeDao">
+
+    <!-- ===============================
+         (user_id, challenge_id) 기준 최신 참여 1건 조회
+         =============================== -->
+    <select id="selectByUserAndChallenge"
+            resultType="com.medeat.challenge.dto.UserChallengeDto">
+        SELECT
+            uc.user_challenge_id   AS userChallengeId,
+            uc.user_id             AS userId,
+            uc.challenge_id        AS challengeId,
+            uc.start_date          AS startDate,
+            uc.end_date            AS endDate,
+            uc.status,
+            uc.giveup_at           AS giveupAt,
+            uc.rejoin_available_at AS rejoinAvailableAt,
+            u.nickname             AS nickname
+        FROM user_challenge uc
+        JOIN user u ON uc.user_id = u.user_id
+        WHERE uc.user_id = #{userId}
+          AND uc.challenge_id = #{challengeId}
+        ORDER BY uc.user_challenge_id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 단건 조회 -->
+    <select id="selectById"
+            parameterType="long"
+            resultType="com.medeat.challenge.dto.UserChallengeDto">
+        SELECT
+            user_challenge_id    AS userChallengeId,
+            user_id              AS userId,
+            challenge_id         AS challengeId,
+            start_date           AS startDate,
+            end_date             AS endDate,
+            status,
+            giveup_at            AS giveupAt,
+            rejoin_available_at  AS rejoinAvailableAt
+        FROM user_challenge
+        WHERE user_challenge_id = #{userChallengeId}
+    </select>
+
+    <!-- 유저의 모드별 진행 중 챌린지 (✅ currentParticipants를 COUNT로 통일) -->
+    <select id="selectByUserAndMode"
+            resultType="com.medeat.challenge.dto.UserChallengeDto">
+        SELECT
+            uc.user_challenge_id AS userChallengeId,
+            uc.user_id           AS userId,
+            uc.challenge_id      AS challengeId,
+            uc.start_date        AS startDate,
+            uc.end_date          AS endDate,
+            uc.status,
+
+            c.mode_type          AS modeType,
+            c.title              AS title,
+            c.category           AS category,
+            c.description        AS description,
+            c.period_days        AS periodDays,
+            c.difficulty         AS difficulty,
+            c.max_participants   AS maxParticipants,
+
+            (SELECT COUNT(*)
+             FROM user_challenge uc2
+             WHERE uc2.challenge_id = c.challenge_id
+               AND uc2.status = 'PROGRESS') AS currentParticipants,
+
+            u.nickname           AS nickname
+        FROM user_challenge uc
+        JOIN challenge c ON uc.challenge_id = c.challenge_id
+        JOIN user u ON uc.user_id = u.user_id
+        WHERE uc.user_id = #{userId}
+          AND c.mode_type = #{modeType}
+          AND uc.status = 'PROGRESS'
+        ORDER BY uc.start_date DESC
+    </select>
+
+    <!-- 상태 변경 (GIVEUP / FINISH) -->
+    <update id="updateStatus">
+        UPDATE user_challenge
+        SET
+            status = #{status},
+            end_date = CASE
+                WHEN #{status} != 'PROGRESS' THEN CURRENT_DATE()
+                ELSE end_date
+            END,
+            giveup_at = CASE
+                WHEN #{status} = 'GIVEUP' THEN NOW()
+                ELSE giveup_at
+            END,
+            rejoin_available_at = CASE
+                WHEN #{status} = 'GIVEUP' THEN DATE_ADD(NOW(), INTERVAL 3 DAY)
+                ELSE rejoin_available_at
+            END
+        WHERE user_challenge_id = #{userChallengeId}
+    </update>
+
+    <!-- 재참여 -->
+    <update id="rejoin">
+        UPDATE user_challenge
+        SET
+            status = 'PROGRESS',
+            start_date = #{startDate},
+            end_date = NULL,
+            giveup_at = NULL,
+            rejoin_available_at = NULL
+        WHERE user_challenge_id = #{userChallengeId}
+          AND status = 'GIVEUP'
+    </update>
+
+    <!-- 종료 -->
+    <update id="finish">
+        UPDATE user_challenge
+        SET
+            status = 'FINISH',
+            end_date = #{endDate}
+        WHERE user_challenge_id = #{userChallengeId}
+          AND status = 'PROGRESS'
+    </update>
+
+    <!-- 상태별 조회 (스케줄러용) -->
+    <select id="selectByStatus"
+            resultType="com.medeat.challenge.dto.UserChallengeDto">
+        SELECT
+            user_challenge_id AS userChallengeId,
+            user_id           AS userId,
+            challenge_id      AS challengeId,
+            start_date        AS startDate,
+            end_date          AS endDate,
+            status
+        FROM user_challenge
+        WHERE status = #{status}
+    </select>
+
+    <!-- 상태별 인원 수 -->
+    <select id="countByChallengeAndStatus" resultType="int">
+        SELECT COUNT(*)
+        FROM user_challenge
+        WHERE challenge_id = #{challengeId}
+          AND status = #{status}
+    </select>
+
+    <!-- 최초 참여 -->
+    <insert id="insertUserChallenge"
+            parameterType="com.medeat.challenge.dto.UserChallengeDto"
+            useGeneratedKeys="true"
+            keyProperty="userChallengeId">
+        INSERT INTO user_challenge (
+            user_id,
+            challenge_id,
+            start_date,
+            end_date,
+            status
+        ) VALUES (
+            #{userId},
+            #{challengeId},
+            #{startDate},
+            #{endDate},
+            #{status}
+        )
+    </insert>
+
+    <!-- 챌린지 삭제 시 -->
+    <delete id="deleteByChallengeId">
+        DELETE FROM user_challenge
+        WHERE challenge_id = #{challengeId}
+    </delete>
+
+</mapper>

@@ -1,0 +1,70 @@
+/* ==============================
+   기본 색상 팔레트
+   ============================== */
+:root {
+  --color-background: #f5f7fa;
+  --color-background-soft: #f0f2f5;
+  --color-background-mute: #e7e9ee;
+
+  --color-text: #222;         /* 🔥 가장 중요한 글자색 */
+  --color-heading: #222;
+
+  --color-border: #dcdcdc;
+  --color-border-hover: #bfbfbf;
+
+  --color-primary: #3c7dff;
+  --color-primary-hover: #2e64d6;
+}
+
+/* ==============================
+   기본 스타일 초기화
+   ============================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-weight: normal;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+}
+
+/* ==============================
+   본문 스타일
+   ============================== */
+body {
+  min-height: 100vh;
+  background: var(--color-background);
+  color: var(--color-text);
+  line-height: 1.6;
+  font-size: 16px;
+
+  font-family:
+    "Noto Sans KR",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Fira Sans",
+    "Droid Sans",
+    "Helvetica Neue",
+    sans-serif;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 모든 텍스트 요소도 기본 글자색 적용 */
+h1, h2, h3, h4, h5, h6,
+p, span, div, ul, li, a,
+button, input, textarea, select {
+  color: var(--color-text);
+}

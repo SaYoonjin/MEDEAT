@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="DietAnalysisMapper">
+
+    <resultMap id="DailyLogSummaryMap" type="com.medeat.dashboard.dto.DailyLogSummary">
+        <result property="logDate"       column="log_date"/>
+        <result property="totalCalorie"  column="totalCalorie"/>
+        <result property="totalCarb"     column="totalCarb"/>
+        <result property="totalProtein"  column="totalProtein"/>
+        <result property="totalFat"      column="totalFat"/>
+        <result property="lateSnackCount" column="lateSnackCount"/>
+    </resultMap>
+
+    <select id="selectDailySummary" resultMap="DailyLogSummaryMap">
+        SELECT
+            dl.log_date AS log_date,
+            SUM(dl.total_calorie) AS totalCalorie,
+            SUM(dl.total_carb) AS totalCarb,
+            SUM(dl.total_protein) AS totalProtein,
+            SUM(dl.total_fat) AS totalFat,
+            SUM(
+                CASE WHEN dl.meal_time IN ('간식','야식') THEN 1 ELSE 0 END
+            ) AS lateSnackCount
+        FROM diet_log dl
+        WHERE dl.user_id = #{userId}
+          AND dl.log_date &gt;= #{startDate}
+          AND dl.log_date &lt;= #{endDate}
+        GROUP BY dl.log_date
+        ORDER BY dl.log_date
+    </select>
+    
+        <!-- MedMealSummary 매핑 -->
+    <resultMap id="MedMealSummaryMap" type="com.medeat.dashboard.dto.MedMealSummary">
+        <id property="dietId"      column="diet_id"/>
+        <result property="logDate" column="log_date"/>
+        <result property="mealTime" column="meal_time"/>
+        <result property="totalCalorie" column="totalCalorie"/>
+        <result property="totalSodium"  column="totalSodium"/>
+        <result property="totalSugar"   column="totalSugar"/>
+    </resultMap>
+
+    <!-- 기간 내 식단 + 나트륨/당 합계 -->
+    <select id="selectMedMeals" resultMap="MedMealSummaryMap">
+        SELECT
+            dl.diet_id,
+            dl.log_date,
+            dl.meal_time,
+            dl.total_calorie                           AS totalCalorie,
+            IFNULL(SUM(f.sodium), 0)                   AS totalSodium,
+            IFNULL(SUM(f.sugar), 0)                    AS totalSugar
+        FROM diet_log dl
+        LEFT JOIN diet_item di ON dl.diet_id = di.diet_id
+        LEFT JOIN food f ON di.food_id = f.food_id
+        WHERE dl.user_id = #{userId}
+          AND dl.log_date &gt;= #{startDate}
+          AND dl.log_date &lt;= #{endDate}
+        GROUP BY dl.diet_id, dl.log_date, dl.meal_time, dl.total_calorie
+        ORDER BY dl.log_date, dl.meal_time
+    </select>
+
+    <!-- 유저 질환 리스트 -->
+    <select id="selectUserDiseases" resultType="string">
+        SELECT d.disease_name
+        FROM user_disease ud
+        JOIN disease d ON ud.disease_id = d.disease_id
+        WHERE ud.user_id = #{userId}
+    </select>
+
+    <!-- 유저 약 목록 (약 이름 + 복용 시간대) -->
+    <resultMap id="MedMedicationSummaryMap" type="com.medeat.medical.dto.MedMedicationSummary">
+        <result property="drugName"   column="drug_name"/>
+        <result property="intakeTime" column="intake_time"/>
+    </resultMap>
+
+    <select id="selectUserMedications" resultMap="MedMedicationSummaryMap">
+        SELECT drug_name, intake_time
+        FROM medication
+        WHERE user_id = #{userId}
+    </select>
+    
+        <!-- EAT 모드: 일별 칼로리 · 탄단지 · 야식/간식 요약 -->
+    <resultMap id="EatDailyChartMap" type="com.medeat.dashboard.dto.DailyChartData">
+        <result property="date"         column="log_date"/>
+        <result property="totalKcal"    column="totalKcal"/>
+        <result property="totalCarb"    column="totalCarb"/>
+        <result property="totalProtein" column="totalProtein"/>
+        <result property="totalFat"     column="totalFat"/>
+        <result property="nightCount"   column="nightCount"/>
+        <result property="snackCount"   column="snackCount"/>
+    </resultMap>
+
+    <select id="selectEatDailyChart"
+            resultMap="EatDailyChartMap">
+        SELECT
+            dl.log_date                           AS log_date,
+            SUM(dl.total_calorie)                AS totalKcal,
+            SUM(dl.total_carb)                   AS totalCarb,
+            SUM(dl.total_protein)                AS totalProtein,
+            SUM(dl.total_fat)                    AS totalFat,
+            SUM(
+                CASE WHEN dl.meal_time = '야식' THEN 1 ELSE 0 END
+            ) AS nightCount,
+            SUM(
+                CASE WHEN dl.meal_time = '간식' THEN 1 ELSE 0 END
+            ) AS snackCount
+        FROM diet_log dl
+        WHERE dl.user_id  = #{userId}
+          AND dl.log_date &gt;= #{startDate}
+          AND dl.log_date &lt;= #{endDate}
+        GROUP BY dl.log_date
+        ORDER BY dl.log_date
+    </select>
+</mapper>

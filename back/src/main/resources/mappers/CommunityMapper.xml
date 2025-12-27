@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.community.dao.CommunityDao">
+
+    <!-- 게시글 등록 -->
+    <insert id="insertPost" parameterType="com.medeat.community.dto.PostDto">
+        INSERT INTO post (
+            user_id, mode_type, category, title, content, image_path
+        )
+        VALUES (
+            #{userId}, #{modeType}, #{category}, #{title}, #{content}, #{imagePath}
+        )
+    </insert>
+
+    <!-- 게시글 목록 (모드별) -->
+    <select id="selectPostList" parameterType="string"
+            resultType="com.medeat.community.dto.PostDto">
+        SELECT 
+            p.post_id       AS postId,
+            p.user_id       AS userId,
+            u.login_id      AS writerId,
+            p.title,
+            p.category,
+            p.mode_type     AS modeType,
+            p.like_count    AS likeCount,
+            p.comment_count AS commentCount,
+            p.scrap_count   AS scrapCount,
+            p.created_at    AS createdAt
+        FROM post p
+        JOIN user u ON p.user_id = u.user_id
+        WHERE p.is_deleted = 0
+          AND p.mode_type = #{modeType}
+        ORDER BY p.created_at DESC
+    </select>
+    
+    <select id="searchPostByTitle"
+	        resultType="com.medeat.community.dto.PostDto">
+	    SELECT 
+	        p.post_id       AS postId,
+	        p.user_id       AS userId,
+	        u.login_id      AS writerId,
+	        p.title,
+	        p.category,
+	        p.mode_type     AS modeType,
+	        p.like_count    AS likeCount,
+	        p.comment_count AS commentCount,
+	        p.scrap_count   AS scrapCount,
+	        p.created_at    AS createdAt
+	    FROM post p
+	    JOIN user u ON p.user_id = u.user_id
+	    WHERE p.is_deleted = 0
+	      AND p.mode_type = #{modeType}
+	      AND p.title LIKE CONCAT('%', #{keyword}, '%')
+	    ORDER BY p.created_at DESC
+	</select>
+    
+
+    <!-- 게시글 상세 -->
+    <select id="selectPostDetail" parameterType="long"
+            resultType="com.medeat.community.dto.PostDto">
+        SELECT 
+            p.post_id       AS postId,
+            p.user_id       AS userId,
+            u.login_id      AS writerId,
+            p.title,
+            p.content,
+            p.image_path    AS imagePath,
+            p.mode_type     AS modeType,
+            p.category      AS category,
+            p.like_count    AS likeCount,
+            p.comment_count AS commentCount,
+            p.scrap_count   AS scrapCount,
+            p.created_at    AS createdAt,
+            p.updated_at    AS updatedAt
+        FROM post p
+        JOIN user u ON p.user_id = u.user_id
+        WHERE p.post_id = #{postId}
+    </select>
+
+    <!-- 게시글 수정 -->
+    <update id="updatePost" parameterType="com.medeat.community.dto.PostDto">
+        UPDATE post
+        SET 
+            title      = #{title},
+            content    = #{content},
+            image_path = #{imagePath},
+            updated_at = NOW()
+        WHERE post_id = #{postId}
+    </update>
+
+    <!-- 게시글 삭제 (soft delete) -->
+    <update id="deletePost" parameterType="long">
+        UPDATE post
+        SET is_deleted = 1
+        WHERE post_id = #{postId}
+    </update>
+
+    <!-- 좋아요/스크랩/댓글 카운트 업데이트 -->
+    <update id="updateLikeCount">
+        UPDATE post
+        SET like_count = like_count + #{amount}
+        WHERE post_id = #{postId}
+    </update>
+
+    <update id="updateScrapCount">
+        UPDATE post
+        SET scrap_count = scrap_count + #{amount}
+        WHERE post_id = #{postId}
+    </update>
+
+    <update id="updateCommentCount">
+        UPDATE post
+        SET comment_count = comment_count + #{amount}
+        WHERE post_id = #{postId}
+    </update>
+
+    <!-- 댓글 작성 -->
+    <insert id="insertComment" parameterType="com.medeat.community.dto.CommentDto">
+        INSERT INTO comment (post_id, user_id, content)
+        VALUES (#{postId}, #{userId}, #{content})
+    </insert>
+
+    <!-- 댓글 목록 -->
+    <select id="selectCommentsByPost" parameterType="long"
+            resultType="com.medeat.community.dto.CommentDto">
+        SELECT 
+            c.comment_id  AS commentId,
+            c.post_id     AS postId,
+            c.user_id     AS userId,
+            u.login_id    AS writerId,
+            c.content,
+            c.created_at  AS createdAt,
+            c.updated_at  AS updatedAt
+        FROM comment c
+        JOIN user u ON c.user_id = u.user_id
+        WHERE c.post_id = #{postId}
+        ORDER BY c.created_at ASC
+    </select>
+
+    <!-- 댓글 단일 조회 -->
+    <select id="selectComment" parameterType="long"
+            resultType="com.medeat.community.dto.CommentDto">
+        SELECT 
+            c.comment_id  AS commentId,
+            c.post_id     AS postId,
+            c.user_id     AS userId,
+            u.login_id    AS writerId,
+            c.content,
+            c.created_at  AS createdAt,
+            c.updated_at  AS updatedAt
+        FROM comment c
+        JOIN user u ON c.user_id = u.user_id
+        WHERE c.comment_id = #{commentId}
+    </select>
+
+    <!-- 댓글 수정 -->
+    <update id="updateComment" parameterType="com.medeat.community.dto.CommentDto">
+        UPDATE comment
+        SET 
+            content    = #{content},
+            updated_at = NOW()
+        WHERE comment_id = #{commentId}
+    </update>
+
+    <!-- 댓글 삭제 -->
+    <delete id="deleteComment" parameterType="long">
+        DELETE FROM comment
+        WHERE comment_id = #{commentId}
+    </delete>
+
+    <!-- 좋아요 체크 -->
+    <select id="checkLike" resultType="int">
+        SELECT COUNT(*)
+        FROM post_like
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+    </select>
+
+    <!-- 좋아요 등록 -->
+    <insert id="insertLike">
+        INSERT INTO post_like (post_id, user_id)
+        VALUES (#{postId}, #{userId})
+    </insert>
+
+    <!-- 좋아요 삭제 -->
+    <delete id="deleteLike">
+        DELETE FROM post_like
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+    </delete>
+
+    <!-- 스크랩 체크 -->
+    <select id="checkScrap" resultType="int">
+        SELECT COUNT(*)
+        FROM post_scrap
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+    </select>
+
+    <!-- 스크랩 등록 -->
+    <insert id="insertScrap">
+        INSERT INTO post_scrap (post_id, user_id)
+        VALUES (#{postId}, #{userId})
+    </insert>
+
+    <!-- 스크랩 삭제 -->
+    <delete id="deleteScrap">
+        DELETE FROM post_scrap
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+    </delete>
+    
+    <select id="selectTopPost" resultType="com.medeat.community.dto.PostDto">
+	    SELECT
+	        p.post_id       AS postId,
+	        p.user_id       AS userId,
+	        p.title,
+	        p.content,
+	        p.image_path    AS imagePath,
+	        p.mode_type     AS modeType,
+	        p.category      AS category,
+	        p.like_count    AS likeCount,
+	        p.comment_count AS commentCount,
+	        p.scrap_count   AS scrapCount,
+	        p.created_at    AS createdAt
+	    FROM post p
+	    WHERE p.is_deleted = 0
+	      AND p.like_count > 0
+	    ORDER BY p.like_count DESC, p.created_at DESC
+	    LIMIT 1
+	</select>
+    
+
+</mapper>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.notification.dao.PushSubscriptionDao">
+
+    <!-- 새로운 구독 정보 저장 -->
+    <insert id="insertSubscription" parameterType="com.medeat.notification.dto.PushSubscriptionDto">
+        INSERT INTO push_subscription (
+            user_id,
+            endpoint,
+            p256dh,
+            auth
+        )
+        VALUES (
+            #{userId},
+            #{endpoint},
+            #{p256dh},
+            #{auth}
+        )
+    </insert>
+
+    <!-- 특정 유저의 모든 구독 정보 조회 -->
+    <select id="selectByUserId" parameterType="long"
+            resultType="com.medeat.notification.dto.PushSubscriptionDto">
+        SELECT
+            id,
+            user_id AS userId,
+            endpoint,
+            p256dh,
+            auth,
+            created_at AS createdAt
+        FROM push_subscription
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 특정 endpoint 존재 여부 확인 (중복 저장 방지용 선택 사항) -->
+    <select id="selectByEndpoint" parameterType="string"
+            resultType="com.medeat.notification.dto.PushSubscriptionDto">
+        SELECT
+            id,
+            user_id AS userId,
+            endpoint,
+            p256dh,
+            auth,
+            created_at AS createdAt
+        FROM push_subscription
+        WHERE endpoint = #{endpoint}
+        LIMIT 1
+    </select>
+
+    <!-- endpoint 삭제 (브라우저에서 구독 취소 시 사용 가능) -->
+    <delete id="deleteByEndpoint" parameterType="string">
+        DELETE FROM push_subscription
+        WHERE endpoint = #{endpoint}
+    </delete>
+    
+    <update id="updatePushEnabled">
+	    UPDATE user
+	    SET push_enabled = #{enabled}
+	    WHERE user_id = #{userId}
+	</update>
+	
+	<select id="getPushEnabled" parameterType="long" resultType="int">
+	    SELECT push_enabled
+	    FROM user
+	    WHERE user_id = #{userId}
+	</select>
+    
+    <update id="updateSubscription" parameterType="com.medeat.notification.dto.PushSubscriptionDto">
+	  UPDATE push_subscription
+	  SET
+	    user_id = #{userId},
+	    p256dh = #{p256dh},
+	    auth = #{auth}
+	  WHERE endpoint = #{endpoint}
+	</update>
+    
+
+</mapper>

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.medeat.auth.dao.UserDao">
+
+    <!-- 회원가입 -->
+	<insert id="insert" parameterType="com.medeat.auth.dto.UserDto">
+	    INSERT INTO user
+	    (login_id, password, name, nickname, email, phone,
+	     gender, age, height, weight, goal_type, default_mode, push_enabled)
+	    VALUES
+	    (#{loginId}, #{password}, #{name}, #{nickname}, #{email}, #{phone},
+	     #{gender}, #{age}, #{height}, #{weight}, #{goalType}, #{defaultMode}, #{pushEnabled})
+	</insert>
+
+    <!-- 로그인 ID 기반 조회 -->
+    <select id="selectByLoginId" parameterType="string"
+	        resultType="com.medeat.auth.dto.UserDto">
+	    SELECT 
+	        user_id        AS userId,
+	        login_id       AS loginId,
+	        password,
+	        name,
+	        nickname,
+	        email,
+	        phone,
+	        gender,
+	        age,
+	        height,
+	        weight,
+	        goal_type      AS goalType,
+	        default_mode   AS defaultMode,
+	        pregnant_status AS pregnantStatus,
+	        pregnancy_week  AS pregnancyWeek,
+	        push_enabled    AS pushEnabled,
+	        created_at      AS createdAt
+	    FROM user
+	    WHERE login_id = #{loginId}
+	</select>
+
+    <!-- PK 기반 조회 -->
+	<select id="selectById" parameterType="long"
+	        resultType="com.medeat.auth.dto.UserDto">
+	    SELECT
+	        user_id         AS userId,
+	        login_id        AS loginId,
+	        password,
+	        name,
+	        nickname,
+	        email,
+	        phone,
+	        gender,
+	        age,
+	        height,
+	        weight,
+	        goal_type       AS goalType,
+	        default_mode    AS defaultMode,
+	        pregnant_status AS pregnantStatus,
+	        pregnancy_week  AS pregnancyWeek,
+	        push_enabled    AS pushEnabled,
+	        created_at      AS createdAt
+	    FROM user
+	    WHERE user_id = #{userId}
+	</select>
+
+    <!-- 회원정보 수정 -->
+	<update id="update" parameterType="com.medeat.auth.dto.UserDto">
+	    UPDATE user
+	    SET
+	        name            = #{name},
+	        nickname        = #{nickname},
+	        email           = #{email},
+	        phone           = #{phone},
+	        gender          = #{gender},
+	        age             = #{age},
+	        height          = #{height},
+	        weight          = #{weight},
+	        goal_type       = #{goalType},
+	        default_mode    = #{defaultMode},
+	        pregnant_status = #{pregnantStatus},
+	        pregnancy_week  = #{pregnancyWeek},
+	        push_enabled    = #{pushEnabled}
+	    WHERE user_id      = #{userId}
+	</update>
+
+    <!-- 회원 삭제 -->
+    <delete id="delete" parameterType="long">
+        DELETE FROM user 
+        WHERE user_id = #{userId}
+    </delete>
+    
+    <select id="findLoginIdsByEmail" resultType="string">
+	    SELECT login_id
+	    FROM user
+	    WHERE email = #{email}
+	</select>
+
+	
+	<update id="updatePasswordByEmail">
+	    UPDATE user
+	    SET password = #{password}
+	    WHERE email = #{email}
+	</update>
+    
+    <select id="selectNicknameById" resultType="string">
+	    SELECT nickname
+	    FROM user
+	    WHERE user_id = #{userId}
+	</select>
+    
+
+</mapper>
