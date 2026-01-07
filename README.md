@@ -1,4 +1,4 @@
-<img width="1187" height="1371" alt="image" src="https://github.com/user-attachments/assets/3abc820d-8d9f-460d-84e5-6d813a6a1a35" /># 🥗 MEDEAT (메딧)
+# 🥗 MEDEAT (메딧)
 ## 📊 Presentation
 - [MEDEAT 발표 자료 (PPT)](https://github.com/SaYoonjin/medeat/releases)
 
