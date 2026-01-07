@@ -102,3 +102,6 @@ AI 이미지 인식 + 공공 데이터 결합한 하이브리드 설계
 
 MEDEAT은 단순 기록을 넘어
 사용자의 건강 데이터를 연결하고 해석하는 통합 헬스케어 플랫폼입니다.
+=======
+# MEDEAT
+Git conflict practice repository
