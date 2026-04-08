@@ -2,10 +2,14 @@ package com.medeat.medical.service;
 
 import com.medeat.medical.dao.DrugInfoDao;
 import com.medeat.medical.dto.DrugInfoDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DrugDetailService {
+
+    private static final Logger log = LoggerFactory.getLogger(DrugDetailService.class);
 
     private final DrugInfoDao drugInfoDao;
     private final DrugInfoService drugInfoService;
@@ -16,48 +20,30 @@ public class DrugDetailService {
     }
 
     public DrugInfoDto getOrFetchDetail(long itemSeq) {
-        System.out.println("[DETAIL] 요청 itemSeq = " + itemSeq);
+        log.debug("Fetching drug detail for itemSeq={}", itemSeq);
 
         DrugInfoDto cached = drugInfoDao.selectByItemSeq(itemSeq);
-        System.out.println("[DETAIL] cached 존재 여부 = " + (cached != null));
-        System.out.println("[DETAIL] cached efcy = "
-                + (cached != null ? cached.getEfcyQesitm() : null));
-
         if (hasRealDetail(cached)) {
-            System.out.println("[DETAIL] 캐시에 상세 정보 있음 → 캐시 반환");
+            log.debug("Returning cached drug detail for itemSeq={}", itemSeq);
             return cached;
         }
 
         try {
-            String nameHint = (cached != null ? cached.getItemName() : null);
-            System.out.println("[DETAIL] 외부 API 호출 시작, nameHint = " + nameHint);
-
-            DrugInfoDto fetched = drugInfoService.getDrugInfo(
-            	    String.valueOf(itemSeq)
-            	);
-
-
-            System.out.println("[DETAIL] fetched = " + fetched);
-            System.out.println("[DETAIL] fetched efcy = "
-                    + (fetched != null ? fetched.getEfcyQesitm() : null));
-
+            DrugInfoDto fetched = drugInfoService.getDrugInfo(String.valueOf(itemSeq));
             if (hasRealDetail(fetched)) {
-                System.out.println("[DETAIL] 외부 API 상세 정보 성공");
+                log.debug("Successfully fetched drug detail from external API. itemSeq={}", itemSeq);
                 return fetched;
             }
 
-            System.out.println("[DETAIL] 외부 API 상세 정보 비어있음 → 캐시 반환");
+            log.debug("External API returned incomplete detail. Falling back to cached value. itemSeq={}", itemSeq);
             return cached;
-
         } catch (Exception e) {
-            System.out.println("[DETAIL] 외부 API 호출 중 예외 발생");
-            e.printStackTrace();
+            log.warn("Failed to fetch drug detail from external API. Falling back to cached value. itemSeq={}", itemSeq, e);
             return cached;
         }
     }
 
-    private boolean hasRealDetail(DrugInfoDto d) {
-        if (d == null) return false;
-        return d.getEfcyQesitm() != null && !d.getEfcyQesitm().trim().isEmpty();
+    private boolean hasRealDetail(DrugInfoDto dto) {
+        return dto != null && dto.getEfcyQesitm() != null && !dto.getEfcyQesitm().trim().isEmpty();
     }
 }

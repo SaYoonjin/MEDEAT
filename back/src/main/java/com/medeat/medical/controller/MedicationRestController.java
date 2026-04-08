@@ -1,230 +1,130 @@
 package com.medeat.medical.controller;
 
-import java.util.List;
-import java.util.Map;
-
 import com.medeat.auth.dto.UserDto;
+import com.medeat.common.web.SessionUserSupport;
 import com.medeat.medical.dto.MedicationDto;
 import com.medeat.medical.dto.MedicationLogDto;
 import com.medeat.medical.service.MedicationService;
 import com.medeat.notification.service.WebPushService;
-
 import jakarta.servlet.http.HttpSession;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/medication")
 public class MedicationRestController {
 
-    @Autowired
-    private MedicationService medicationService;
-    
-    @Autowired
-    private WebPushService webPushService;
+    private final MedicationService medicationService;
+    private final WebPushService webPushService;
+    private final SessionUserSupport sessionUserSupport;
+    private final TaskScheduler taskScheduler;
 
+    public MedicationRestController(
+            MedicationService medicationService,
+            WebPushService webPushService,
+            SessionUserSupport sessionUserSupport,
+            TaskScheduler taskScheduler
+    ) {
+        this.medicationService = medicationService;
+        this.webPushService = webPushService;
+        this.sessionUserSupport = sessionUserSupport;
+        this.taskScheduler = taskScheduler;
+    }
 
-    /** ****************************************
-     * 1. 유저 약 목록 조회
-     ******************************************/
     @GetMapping("")
-    public ResponseEntity<?> list(HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-        if (user == null) {
-            return ResponseEntity.status(401).body("로그인이 필요합니다.");
-        }
-
-        List<MedicationDto> list = medicationService.getMedicationList(user.getUserId());
-        return ResponseEntity.ok(list);
+    public ResponseEntity<List<MedicationDto>> list(HttpSession session) {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
+        return ResponseEntity.ok(medicationService.getMedicationList(user.getUserId()));
     }
-    
 
-
-    /** ****************************************
-     * 2. 단일 약 조회
-     ******************************************/
     @GetMapping("/{id}")
-    public ResponseEntity<?> detail(
-            @PathVariable Long id,
-            HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-        if (user == null) {
-            return ResponseEntity.status(401).body("로그인이 필요합니다.");
-        }
-
-        MedicationDto med = medicationService.getMedication(id);
-        return ResponseEntity.ok(med);
+    public ResponseEntity<MedicationDto> detail(@PathVariable Long id, HttpSession session) {
+        sessionUserSupport.getRequiredUser(session);
+        return ResponseEntity.ok(medicationService.getMedication(id));
     }
-
 
     @PostMapping("")
-    public ResponseEntity<?> create(
-            @RequestBody MedicationDto dto,
-            HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-        if (user == null) {
-            return ResponseEntity.status(401).body("로그인이 필요합니다.");
-        }
-
+    public ResponseEntity<Map<String, String>> create(@RequestBody MedicationDto dto, HttpSession session) {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
         dto.setUserId(user.getUserId());
-
-        try {
-            medicationService.addMedication(dto);
-            return ResponseEntity.ok("약 등록 완료");
-
-        } catch (IllegalArgumentException e) {
-            // 🔥 중복일 경우 여기로 들어옴
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        medicationService.addMedication(dto);
+        return ResponseEntity.ok(Map.of("message", "복약 정보 등록이 완료되었습니다."));
     }
 
-
-
-    /** ****************************************
-     * 4. 수정
-     ******************************************/
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(
+    public ResponseEntity<Map<String, String>> update(
             @PathVariable Long id,
             @RequestBody MedicationDto dto,
-            HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-        if (user == null) {
-            return ResponseEntity.status(401).body("로그인이 필요합니다.");
-        }
-
+            HttpSession session
+    ) {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
         dto.setMedicationId(id);
         dto.setUserId(user.getUserId());
-
-        try {
-            medicationService.updateMedication(dto);
-            return ResponseEntity.ok("약 수정 완료");
-
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        medicationService.updateMedication(dto);
+        return ResponseEntity.ok(Map.of("message", "복약 정보 수정이 완료되었습니다."));
     }
 
-
-
-    /** ****************************************
-     * 5. 삭제
-     ******************************************/
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(
-            @PathVariable Long id,
-            HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-
-        if (user == null) {
-            return ResponseEntity.status(401).body("로그인이 필요합니다.");
-        }
-
+    public ResponseEntity<Map<String, String>> delete(@PathVariable Long id, HttpSession session) {
+        sessionUserSupport.getRequiredUser(session);
         medicationService.deleteMedication(id);
-
-        return ResponseEntity.ok("약 삭제 완료");
+        return ResponseEntity.ok(Map.of("message", "복약 정보 삭제가 완료되었습니다."));
     }
-    
-    /** 오늘 복용한 기록 조회 */
+
     @GetMapping("/log/today")
-    public ResponseEntity<?> getTodayLogs(HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-
-        if (user == null) {
-            return ResponseEntity.status(401).body("로그인이 필요합니다.");
-        }
-
-        List<MedicationLogDto> logs = medicationService.getTodayLogs(user.getUserId());
-        return ResponseEntity.ok(logs);
+    public ResponseEntity<List<MedicationLogDto>> getTodayLogs(HttpSession session) {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
+        return ResponseEntity.ok(medicationService.getTodayLogs(user.getUserId()));
     }
 
-    /** 복용 기록 저장 */
     @PostMapping("/log")
-    public ResponseEntity<?> saveLog(
+    public ResponseEntity<Map<String, String>> saveLog(
             @RequestParam Long medicationId,
             @RequestParam int takenIndex,
-            HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-
-        if (user == null) {
-            return ResponseEntity.status(401).body("로그인이 필요합니다.");
-        }
-
-        medicationService.saveLog(
-                user.getUserId(),
-                medicationId,
-                takenIndex
-        );
-
-        return ResponseEntity.ok(Map.of("message", "복용 기록 저장 완료"));
+            HttpSession session
+    ) {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
+        medicationService.saveLog(user.getUserId(), medicationId, takenIndex);
+        return ResponseEntity.ok(Map.of("message", "복용 기록 저장이 완료되었습니다."));
     }
-    
-    /** ****************************************
-     * 6. 약 복용 완료 처리 (푸시 알림 버튼)
-     ******************************************/
+
     @PostMapping("/take")
-    public ResponseEntity<?> takeMedication(@RequestBody Map<String, Object> req,
-                                            HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-        if (user == null) return ResponseEntity.status(401).body("로그인이 필요합니다.");
-
+    public ResponseEntity<Map<String, String>> takeMedication(@RequestBody Map<String, Object> req, HttpSession session) {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
         Long medicationId = Long.valueOf(req.get("medicationId").toString());
         int doseIndex = Integer.parseInt(req.get("doseIndex").toString());
-
-        // 기록 저장
         medicationService.saveLog(user.getUserId(), medicationId, doseIndex);
-
-        return ResponseEntity.ok("복용 완료 처리됨");
+        return ResponseEntity.ok(Map.of("message", "복용 완료 처리되었습니다."));
     }
 
-    /** ****************************************
-     * 7. 알림 재설정 (delayMinutes 후 다시 알림)
-     ******************************************/
     @PostMapping("/reschedule")
-    public ResponseEntity<?> rescheduleAlarm(@RequestBody Map<String, Object> body,
-                                             HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-        if (user == null) return ResponseEntity.status(401).body("로그인 필요");
+    public ResponseEntity<Map<String, String>> rescheduleAlarm(@RequestBody Map<String, Object> body, HttpSession session) {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
 
         Long medicationId = Long.valueOf(body.get("medicationId").toString());
         int delayMinutes = Integer.parseInt(body.get("delayMinutes").toString());
         int doseIndex = Integer.parseInt(body.get("doseIndex").toString());
 
         MedicationDto med = medicationService.getMedication(medicationId);
-        if (med == null) return ResponseEntity.status(404).body("약 정보를 찾을 수 없습니다.");
+        if (med == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "복약 정보를 찾을 수 없습니다.");
+        }
 
-        // 🔥 delayMinutes 뒤 알림 재발송 (Thread 사용)
-        new Thread(() -> {
-            try {
-                Thread.sleep(delayMinutes * 60 * 1000);
+        taskScheduler.schedule(() -> webPushService.sendMedicationNotification(
+                user.getUserId(),
+                medicationId,
+                doseIndex,
+                "복용 알림",
+                med.getDrugName() + " 복용 시간입니다."
+        ), Instant.now().plusSeconds(delayMinutes * 60L));
 
-                String title = "🔔 약 복용 재알림";
-                String bodyMsg = med.getDrugName() + " 복용 시간입니다.";
-
-                webPushService.sendMedicationNotification(
-                        user.getUserId(),
-                        medicationId,
-                        doseIndex,
-                        title,
-                        bodyMsg
-                );
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
-
-        return ResponseEntity.ok("재알림 예약됨");
+        return ResponseEntity.ok(Map.of("message", "알림이 다시 예약되었습니다."));
     }
-
 }

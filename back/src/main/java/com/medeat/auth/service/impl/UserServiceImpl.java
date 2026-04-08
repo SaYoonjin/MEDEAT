@@ -1,78 +1,98 @@
 package com.medeat.auth.service.impl;
 
-import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.stereotype.Service;
-
-import com.medeat.auth.dao.UserDao;
+import com.medeat.auth.domain.user.entity.User;
+import com.medeat.auth.domain.user.mapper.UserMapper;
+import com.medeat.auth.domain.user.repository.UserRepository;
 import com.medeat.auth.dto.UserDto;
 import com.medeat.auth.service.UserService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
+@Transactional(readOnly = true)
 public class UserServiceImpl implements UserService {
 
-    @Autowired
-    private UserDao userDao;
+    private final UserRepository userRepository;
+    private final UserMapper userMapper;
+    private final BCryptPasswordEncoder passwordEncoder;
 
-    @Autowired
-    private BCryptPasswordEncoder passwordEncoder;
+    public UserServiceImpl(
+            UserRepository userRepository,
+            UserMapper userMapper,
+            BCryptPasswordEncoder passwordEncoder
+    ) {
+        this.userRepository = userRepository;
+        this.userMapper = userMapper;
+        this.passwordEncoder = passwordEncoder;
+    }
 
     @Override
+    @Transactional
     public boolean signup(UserDto user) {
-        String encodedPw = passwordEncoder.encode(user.getPassword());
-        user.setPassword(encodedPw);
-
-        // 🔔 가입 시 기본값: 알림 ON
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         user.setPushEnabled(true);
 
-        return userDao.insert(user) > 0;
+        User entity = userMapper.toNewEntity(user);
+        userRepository.save(entity);
+        return true;
     }
 
     @Override
     public UserDto login(String loginId, String password) {
-
-        UserDto dbUser = userDao.selectByLoginId(loginId);
-
-        if (dbUser == null) {
-            return null;
-        }
-
-        if (!passwordEncoder.matches(password, dbUser.getPassword())) {
-            return null;
-        }
-
-        return dbUser;
+        return userRepository.findByLoginId(loginId)
+                .filter(user -> passwordEncoder.matches(password, user.getPassword()))
+                .map(userMapper::toDto)
+                .orElse(null);
     }
 
     @Override
     public UserDto getUserById(Long userId) {
-        return userDao.selectById(userId);
+        return userRepository.findById(userId)
+                .map(userMapper::toDto)
+                .orElse(null);
     }
 
     @Override
     public UserDto getUserByLoginId(String loginId) {
-        return userDao.selectByLoginId(loginId);
+        return userRepository.findByLoginId(loginId)
+                .map(userMapper::toDto)
+                .orElse(null);
     }
 
     @Override
+    @Transactional
     public void update(UserDto user) {
         if (user == null || user.getUserId() == null) {
-            throw new IllegalArgumentException("userId 없음 → update 불가");
+            throw new IllegalArgumentException("userId가 없습니다.");
         }
-        userDao.update(user);
+
+        User entity = userRepository.findById(user.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        userMapper.apply(user, entity);
     }
 
     @Override
     public List<String> findLoginIdsByEmail(String email) {
-        return userDao.findLoginIdsByEmail(email);
+        return userRepository.findByEmail(email)
+                .stream()
+                .map(User::getLoginId)
+                .toList();
     }
 
+    @Override
+    @Transactional
+    public boolean updatePasswordByEmail(String email, String newPassword) {
+        List<User> users = userRepository.findByEmail(email);
+        if (users.isEmpty()) {
+            return false;
+        }
 
-	@Override
-	public boolean updatePasswordByEmail(String email, String newPassword) {
-		String encoded = passwordEncoder.encode(newPassword);
-	    return userDao.updatePasswordByEmail(email, encoded) > 0;
-	}
+        String encoded = passwordEncoder.encode(newPassword);
+        users.forEach(user -> user.setPassword(encoded));
+        return true;
+    }
 }

@@ -1,6 +1,8 @@
 package com.medeat.util;
 
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -13,65 +15,63 @@ import java.util.Map;
 @Component
 public class PillNameCsvLoader {
 
+    private static final Logger log = LoggerFactory.getLogger(PillNameCsvLoader.class);
+
     private final Map<Long, String> itemSeqToNameMap = new HashMap<>();
 
     @PostConstruct
     public void load() {
-        try {
-            InputStream is = getClass()
-                    .getClassLoader()
-                    .getResourceAsStream("pill/pill_name.csv");
-
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("pill/pill_name.csv")) {
             if (is == null) {
-                System.out.println("❌ pill_name.csv 파일을 찾을 수 없습니다.");
+                log.warn("pill_name.csv file was not found in classpath.");
                 return;
             }
 
-            BufferedReader br = new BufferedReader(
-                    new InputStreamReader(is, StandardCharsets.UTF_8)
-            );
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+                String line;
+                boolean first = true;
 
-            String line;
-            boolean first = true;
+                while ((line = br.readLine()) != null) {
+                    if (first) {
+                        first = false;
+                        continue;
+                    }
 
-            while ((line = br.readLine()) != null) {
-                if (first) {
-                    first = false;
-                    continue;
+                    String[] cols = line.split(",", -1);
+                    if (cols.length < 5) {
+                        continue;
+                    }
+
+                    String name = cols[3].trim();
+                    String seqStr = cols[4].trim();
+
+                    if (name.isEmpty() || seqStr.isEmpty()) {
+                        continue;
+                    }
+
+                    try {
+                        itemSeqToNameMap.put(Long.parseLong(seqStr), name);
+                    } catch (NumberFormatException ignore) {
+                        log.debug("Skipping invalid pill item sequence: {}", seqStr);
+                    }
                 }
-
-                String[] cols = line.split(",", -1);
-                if (cols.length < 5) continue;
-
-                // ⭐ 네가 강조한 바로 그 부분
-                String name = cols[3].trim();     // 품목명
-                String seqStr = cols[4].trim();  // 품목기준코드
-
-                if (name.isEmpty() || seqStr.isEmpty()) continue;
-
-                try {
-                    Long itemSeq = Long.parseLong(seqStr);
-                    itemSeqToNameMap.put(itemSeq, name);
-                } catch (NumberFormatException ignore) {}
             }
 
-            System.out.println("✅ CSV 약품명 로딩 완료: " + itemSeqToNameMap.size());
-
+            log.info("Loaded {} pill names from CSV.", itemSeqToNameMap.size());
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to load pill_name.csv.", e);
         }
     }
 
     public String getName(String itemSeq) {
-        if (itemSeq == null) return null;
+        if (itemSeq == null) {
+            return null;
+        }
 
         try {
-            Long key = Long.parseLong(itemSeq);
-            return itemSeqToNameMap.get(key);
+            return itemSeqToNameMap.get(Long.parseLong(itemSeq));
         } catch (NumberFormatException e) {
             return null;
         }
     }
-
-
 }

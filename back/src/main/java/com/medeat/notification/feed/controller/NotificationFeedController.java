@@ -1,83 +1,67 @@
 package com.medeat.notification.feed.controller;
 
-import java.util.List;
-import java.util.Map;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
-
-import com.medeat.auth.dto.UserDto;
+import com.medeat.common.web.SessionUserSupport;
 import com.medeat.notification.feed.dto.NotificationFeedDto;
 import com.medeat.notification.feed.service.NotificationFeedService;
-
 import jakarta.servlet.http.HttpSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/notifications/feed")
 public class NotificationFeedController {
 
-    @Autowired
-    private NotificationFeedService notificationFeedService;
+    private static final Logger log = LoggerFactory.getLogger(NotificationFeedController.class);
 
-    private Long loginUserId(HttpSession session) {
-        UserDto loginUser = (UserDto) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            throw new ResponseStatusException(
-                HttpStatus.UNAUTHORIZED,
-                "로그인이 필요합니다."
-            );
-        }
-        return loginUser.getUserId();
+    private final NotificationFeedService notificationFeedService;
+    private final SessionUserSupport sessionUserSupport;
+
+    public NotificationFeedController(
+            NotificationFeedService notificationFeedService,
+            SessionUserSupport sessionUserSupport
+    ) {
+        this.notificationFeedService = notificationFeedService;
+        this.sessionUserSupport = sessionUserSupport;
     }
 
     @GetMapping
     public List<NotificationFeedDto> recent(HttpSession session) {
-        return notificationFeedService.getRecent(
-            loginUserId(session),
-            5
-        );
+        return notificationFeedService.getRecent(sessionUserSupport.getRequiredUser(session).getUserId(), 5);
     }
 
     @GetMapping("/all")
     public List<NotificationFeedDto> all(HttpSession session) {
-        return notificationFeedService.getMyFeeds(
-            loginUserId(session)
-        );
+        return notificationFeedService.getMyFeeds(sessionUserSupport.getRequiredUser(session).getUserId());
     }
-
 
     @GetMapping("/unread-count")
     public int unreadCount(HttpSession session) {
-        return notificationFeedService.getUnreadCount(loginUserId(session));
+        return notificationFeedService.getUnreadCount(sessionUserSupport.getRequiredUser(session).getUserId());
     }
 
     @PatchMapping("/{id}/read")
     public void read(@PathVariable Long id, HttpSession session) {
-        notificationFeedService.read(loginUserId(session), id);
-    }
-    
-    @PatchMapping("/read-recent")
-    public void readRecent(HttpSession session) {
-        notificationFeedService.readRecent(loginUserId(session));
+        notificationFeedService.read(sessionUserSupport.getRequiredUser(session).getUserId(), id);
     }
 
+    @PatchMapping("/read-recent")
+    public void readRecent(HttpSession session) {
+        notificationFeedService.readRecent(sessionUserSupport.getRequiredUser(session).getUserId());
+    }
 
     @PatchMapping("/read-all")
     public void readAll(HttpSession session) {
-        notificationFeedService.readAll(loginUserId(session));
+        notificationFeedService.readAll(sessionUserSupport.getRequiredUser(session).getUserId());
     }
-    
+
     @PatchMapping("/read-batch")
-    public void readBatch(
-        @RequestBody Map<String, List<Long>> body,
-        HttpSession session
-    ) {
+    public void readBatch(@RequestBody Map<String, List<Long>> body, HttpSession session) {
         List<Long> ids = body.get("ids");
-        System.out.println("🔥 read-batch ids = " + ids);
-        notificationFeedService.readBatch(loginUserId(session), ids);
+        log.debug("Marking notification batch as read. ids={}", ids);
+        notificationFeedService.readBatch(sessionUserSupport.getRequiredUser(session).getUserId(), ids);
     }
-
-
 }

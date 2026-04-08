@@ -1,48 +1,35 @@
 package com.medeat.community.service.impl;
 
-import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
 import com.medeat.community.dao.CommunityDao;
 import com.medeat.community.dto.CommentDto;
 import com.medeat.community.dto.PostDto;
 import com.medeat.community.service.CommunityService;
-import com.medeat.notification.feed.service.NotificationFeedService;
 import com.medeat.notification.feed.dto.NotificationFeedType;
+import com.medeat.notification.feed.service.NotificationFeedService;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
+import java.util.List;
 
 @Service
 public class CommunityServiceImpl implements CommunityService {
 
-    @Autowired
-    private CommunityDao communityDao;
-    
-    @Autowired
-    private NotificationFeedService notificationFeedService;
+    private final CommunityDao communityDao;
+    private final NotificationFeedService notificationFeedService;
 
-
-    /* ==============================
-           게시글
-     ============================== */
+    public CommunityServiceImpl(CommunityDao communityDao, NotificationFeedService notificationFeedService) {
+        this.communityDao = communityDao;
+        this.notificationFeedService = notificationFeedService;
+    }
 
     @Override
     public List<PostDto> getPostList(String modeType, String keyword) {
-
-        System.out.println("🔥 Service keyword = [" + keyword + "]");
-
-        if (keyword == null || keyword.trim().isEmpty()) {
+        if (!StringUtils.hasText(keyword)) {
             return communityDao.selectPostList(modeType);
         }
 
-        return communityDao.searchPostByTitle(
-            modeType,
-            keyword.trim()
-        );
+        return communityDao.searchPostByTitle(modeType, keyword.trim());
     }
-
-
 
     @Override
     public PostDto getPost(Long postId) {
@@ -64,11 +51,6 @@ public class CommunityServiceImpl implements CommunityService {
         communityDao.deletePost(postId);
     }
 
-
-    /* ==============================
-           댓글
-     ============================== */
-
     @Override
     public List<CommentDto> getCommentList(Long postId) {
         return communityDao.selectCommentsByPost(postId);
@@ -76,28 +58,21 @@ public class CommunityServiceImpl implements CommunityService {
 
     @Override
     public void writeComment(CommentDto dto) {
-
         communityDao.insertComment(dto);
-        communityDao.updateCommentCount(dto.getPostId(), +1);
+        communityDao.updateCommentCount(dto.getPostId(), 1);
 
-        // 🔥 게시글 다시 조회 (DB 기준)
         PostDto post = communityDao.selectPostDetail(dto.getPostId());
-        if (post == null) return;
-
-        Long receiverUserId = post.getUserId(); // ✅ FK 기준
-
-        // 본인 글에 본인이 댓글 → 알림 X
-        if (receiverUserId.equals(dto.getUserId())) return;
+        if (post == null || post.getUserId().equals(dto.getUserId())) {
+            return;
+        }
 
         notificationFeedService.notify(
-        	    receiverUserId,
-        	    NotificationFeedType.COMMUNITY_COMMENT,
-        	    "POST",
-        	    dto.getPostId()
-        	);
-
+                post.getUserId(),
+                NotificationFeedType.COMMUNITY_COMMENT,
+                "POST",
+                dto.getPostId()
+        );
     }
-
 
     @Override
     public CommentDto getComment(Long commentId) {
@@ -111,87 +86,56 @@ public class CommunityServiceImpl implements CommunityService {
 
     @Override
     public void deleteComment(Long commentId) {
-
-        // 🔥 삭제하기 전 postId를 얻어야 함
         CommentDto origin = communityDao.selectComment(commentId);
         if (origin == null) {
-            return;  // 안전하게 종료 (NPE 방지)
+            return;
         }
 
-        // 댓글 삭제
         communityDao.deleteComment(commentId);
-
-        // 🔥 댓글 count 감소
         communityDao.updateCommentCount(origin.getPostId(), -1);
     }
 
-
-    /* ==============================
-           좋아요 / 스크랩
-     ============================== */
-
     @Override
     public boolean toggleLike(Long postId, Long userId) {
-
         int exists = communityDao.checkLike(postId, userId);
-
         if (exists == 0) {
             communityDao.insertLike(postId, userId);
-            communityDao.updateLikeCount(postId, +1);
-
-            PostDto post = communityDao.selectPostDetail(postId);
-            if (post != null && !post.getUserId().equals(userId)) {
-            	notificationFeedService.notify(
-            		    post.getUserId(),
-            		    NotificationFeedType.COMMUNITY_LIKE,
-            		    "POST",
-            		    postId
-            		);
-
-
-            }
-
+            communityDao.updateLikeCount(postId, 1);
+            notifyPostOwner(postId, userId, NotificationFeedType.COMMUNITY_LIKE);
             return true;
-        } else {
-            communityDao.deleteLike(postId, userId);
-            communityDao.updateLikeCount(postId, -1);
-            return false;
         }
-    }
 
+        communityDao.deleteLike(postId, userId);
+        communityDao.updateLikeCount(postId, -1);
+        return false;
+    }
 
     @Override
     public boolean toggleScrap(Long postId, Long userId) {
-
         int exists = communityDao.checkScrap(postId, userId);
-
         if (exists == 0) {
             communityDao.insertScrap(postId, userId);
-            communityDao.updateScrapCount(postId, +1);
-
-            PostDto post = communityDao.selectPostDetail(postId);
-            if (post != null && !post.getUserId().equals(userId)) {
-            	notificationFeedService.notify(
-            		    post.getUserId(),
-            		    NotificationFeedType.COMMUNITY_SCRAP,
-            		    "POST",
-            		    postId
-            		);
-
-
-            }
-
+            communityDao.updateScrapCount(postId, 1);
+            notifyPostOwner(postId, userId, NotificationFeedType.COMMUNITY_SCRAP);
             return true;
-        } else {
-            communityDao.deleteScrap(postId, userId);
-            communityDao.updateScrapCount(postId, -1);
-            return false;
         }
+
+        communityDao.deleteScrap(postId, userId);
+        communityDao.updateScrapCount(postId, -1);
+        return false;
     }
 
+    @Override
+    public PostDto getTopPost() {
+        return communityDao.selectTopPost();
+    }
 
-	@Override
-	public PostDto getTopPost() {
-		return communityDao.selectTopPost();
-	}
-}	
+    private void notifyPostOwner(Long postId, Long actorUserId, NotificationFeedType type) {
+        PostDto post = communityDao.selectPostDetail(postId);
+        if (post == null || post.getUserId().equals(actorUserId)) {
+            return;
+        }
+
+        notificationFeedService.notify(post.getUserId(), type, "POST", postId);
+    }
+}

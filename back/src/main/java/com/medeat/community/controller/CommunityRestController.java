@@ -1,307 +1,175 @@
 package com.medeat.community.controller;
 
 import com.medeat.auth.dto.UserDto;
+import com.medeat.common.file.FileStorageService;
+import com.medeat.common.web.SessionUserSupport;
 import com.medeat.community.dto.CommentDto;
 import com.medeat.community.dto.PostDto;
 import com.medeat.community.service.CommunityService;
-
+import com.medeat.gamification.model.ActionType;
+import com.medeat.gamification.service.GamificationService;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import com.medeat.gamification.model.ActionType;
-import com.medeat.gamification.service.GamificationService;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.time.LocalDate;
-
-import java.io.File;
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/community")
 public class CommunityRestController {
 
-    @Autowired
-    private CommunityService communityService;
-    
-    @Autowired
-    private GamificationService gamificationService;
+    private final CommunityService communityService;
+    private final GamificationService gamificationService;
+    private final SessionUserSupport sessionUserSupport;
+    private final FileStorageService fileStorageService;
 
+    public CommunityRestController(
+            CommunityService communityService,
+            GamificationService gamificationService,
+            SessionUserSupport sessionUserSupport,
+            FileStorageService fileStorageService
+    ) {
+        this.communityService = communityService;
+        this.gamificationService = gamificationService;
+        this.sessionUserSupport = sessionUserSupport;
+        this.fileStorageService = fileStorageService;
+    }
 
-    /** ****************************************
-     * 1. 게시글 목록
-     ******************************************/
     @GetMapping("")
-    public ResponseEntity<?> list(
+    public ResponseEntity<List<PostDto>> list(
             @RequestParam(defaultValue = "EAT") String mode,
             @RequestParam(required = false) String keyword
     ) {
-        List<PostDto> posts = communityService.getPostList(mode, keyword);
-        return ResponseEntity.ok(posts);
+        return ResponseEntity.ok(communityService.getPostList(mode, keyword));
     }
 
-    /** ****************************************
-     * 2. 게시글 상세 조회 (게시글 + 댓글)
-     ******************************************/
     @GetMapping("/{postId}")
-    public ResponseEntity<?> detail(
-            @PathVariable Long postId,
-            HttpSession session) {
-
-        PostDto post = communityService.getPost(postId);
-        if (post == null) {
-            return ResponseEntity.status(404)
-                    .body(Map.of("message", "게시글을 찾을 수 없습니다."));
-        }
-
+    public ResponseEntity<Map<String, Object>> detail(@PathVariable Long postId, HttpSession session) {
+        PostDto post = requirePost(postId);
         List<CommentDto> comments = communityService.getCommentList(postId);
+        UserDto loginUser = sessionUserSupport.getOptionalUser(session);
 
-        UserDto loginUser = (UserDto) session.getAttribute("loginUser");
-        Long loginUserId = (loginUser != null) ? loginUser.getUserId() : null;
-
-        Map<String, Object> result = new HashMap<>();
+        Map<String, Object> result = new LinkedHashMap<>();
         result.put("post", post);
         result.put("comments", comments);
-        result.put("loginUserId", loginUserId);
-
+        result.put("loginUserId", loginUser != null ? loginUser.getUserId() : null);
         return ResponseEntity.ok(result);
     }
 
-
-    /** ****************************************
-     * 3. 게시글 작성
-     ******************************************/
     @PostMapping("")
-    public ResponseEntity<?> write(
+    public ResponseEntity<Map<String, String>> write(
             @RequestPart("dto") PostDto dto,
             @RequestPart(value = "uploadFile", required = false) MultipartFile file,
-            HttpSession session) throws Exception {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-        if (user == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "로그인 필요"));
-        }
-
+            HttpSession session
+    ) throws IOException {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
         dto.setUserId(user.getUserId());
 
-        // 파일 업로드
-        if (file != null && !file.isEmpty()) {
-            String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
-            String savePath = "C:/medeat/upload/" + fileName;
-
-            file.transferTo(new File(savePath));
+        String fileName = fileStorageService.store(file, "");
+        if (fileName != null) {
             dto.setImagePath(fileName);
         }
 
         communityService.writePost(dto);
-        
-        gamificationService.earnXp(
-        	    user.getUserId(),
-        	    ActionType.POST_CREATE,
-        	    null,                 // ✅ 날짜 refId 강제(하루 1회)
-        	    5,
-        	    LocalDate.now()
-        	);
+        gamificationService.earnXp(user.getUserId(), ActionType.POST_CREATE, null, 5, LocalDate.now());
 
-        return ResponseEntity.ok(Map.of("message", "게시글 작성 완료"));
+        return ResponseEntity.ok(Map.of("message", "게시글 작성이 완료되었습니다."));
     }
 
-
-    /** ****************************************
-     * 4. 게시글 수정
-     ******************************************/
     @PutMapping("/{postId}")
-    public ResponseEntity<?> update(
+    public ResponseEntity<Map<String, String>> update(
             @PathVariable Long postId,
             @RequestPart("dto") PostDto dto,
             @RequestPart(value = "uploadFile", required = false) MultipartFile file,
-            HttpSession session) throws Exception {
+            HttpSession session
+    ) throws IOException {
+        UserDto loginUser = sessionUserSupport.getRequiredUser(session);
+        PostDto origin = requirePost(postId);
+        validateOwner(origin.getUserId(), loginUser.getUserId(), "게시글 수정 권한이 없습니다.");
 
-        UserDto loginUser = (UserDto) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "로그인 필요"));
-        }
-
-        PostDto origin = communityService.getPost(postId);
-        if (!origin.getUserId().equals(loginUser.getUserId())) {
-            return ResponseEntity.status(403).body(Map.of("message", "수정 권한 없음"));
-        }
-
-        // 파일 업로드
-        if (file != null && !file.isEmpty()) {
-            String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
-            String savePath = "C:/medeat/upload/" + fileName;
-
-            file.transferTo(new File(savePath));
+        String fileName = fileStorageService.store(file, "");
+        if (fileName != null) {
             dto.setImagePath(fileName);
         }
 
         dto.setPostId(postId);
+        dto.setUserId(loginUser.getUserId());
         communityService.updatePost(dto);
 
-        return ResponseEntity.ok(Map.of("message", "게시글 수정 완료"));
+        return ResponseEntity.ok(Map.of("message", "게시글 수정이 완료되었습니다."));
     }
 
-
-    /** ****************************************
-     * 5. 게시글 삭제
-     ******************************************/
     @DeleteMapping("/{postId}")
-    public ResponseEntity<?> delete(
-            @PathVariable Long postId,
-            HttpSession session) {
-
-        UserDto loginUser = (UserDto) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "로그인 필요"));
-        }
-
-        PostDto post = communityService.getPost(postId);
-        if (!post.getUserId().equals(loginUser.getUserId())) {
-            return ResponseEntity.status(403).body(Map.of("message", "삭제 권한 없음"));
-        }
+    public ResponseEntity<Map<String, String>> delete(@PathVariable Long postId, HttpSession session) {
+        UserDto loginUser = sessionUserSupport.getRequiredUser(session);
+        PostDto post = requirePost(postId);
+        validateOwner(post.getUserId(), loginUser.getUserId(), "게시글 삭제 권한이 없습니다.");
 
         communityService.deletePost(postId);
-
-        return ResponseEntity.ok(Map.of("message", "게시글 삭제 완료"));
+        return ResponseEntity.ok(Map.of("message", "게시글 삭제가 완료되었습니다."));
     }
 
-
-    /** ****************************************
-     * 6. 댓글 작성
-     ******************************************/
     @PostMapping("/comment")
-    public ResponseEntity<?> comment(
-            @RequestBody CommentDto dto,
-            HttpSession session) {
-
-        UserDto user = (UserDto) session.getAttribute("loginUser");
-        if (user == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "로그인 필요"));
-        }
-
+    public ResponseEntity<Map<String, String>> comment(@RequestBody CommentDto dto, HttpSession session) {
+        UserDto user = sessionUserSupport.getRequiredUser(session);
         dto.setUserId(user.getUserId());
         communityService.writeComment(dto);
-        
-        Long commentId = dto.getCommentId(); // insert 후 채워진다고 가정
-        String refId = (commentId != null) ? ("comment:" + commentId) : ("comment:post:" + dto.getPostId() + ":" + System.currentTimeMillis());
 
-        gamificationService.earnXp(
-            user.getUserId(),
-            ActionType.COMMENT_CREATE,
-            refId,
-            2,
-            LocalDate.now()
-        );
+        Long commentId = dto.getCommentId();
+        String refId = (commentId != null)
+                ? "comment:" + commentId
+                : "comment:post:" + dto.getPostId() + ":" + System.currentTimeMillis();
 
-        return ResponseEntity.ok(Map.of("message", "댓글 작성 완료"));
+        gamificationService.earnXp(user.getUserId(), ActionType.COMMENT_CREATE, refId, 2, LocalDate.now());
+        return ResponseEntity.ok(Map.of("message", "댓글 작성이 완료되었습니다."));
     }
 
-
-    /** ****************************************
-     * 7. 댓글 삭제
-     ******************************************/
     @DeleteMapping("/comment/{commentId}")
-    public ResponseEntity<?> deleteComment(
-            @PathVariable Long commentId,
-            HttpSession session) {
+    public ResponseEntity<Map<String, String>> deleteComment(@PathVariable Long commentId, HttpSession session) {
+        UserDto loginUser = sessionUserSupport.getRequiredUser(session);
+        CommentDto comment = requireComment(commentId);
+        PostDto post = requirePost(comment.getPostId());
 
-        UserDto loginUser = (UserDto) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "로그인 필요"));
-        }
-
-        CommentDto comment = communityService.getComment(commentId);
-        if (comment == null) {
-            return ResponseEntity.status(404).body(Map.of("message", "댓글 없음"));
-        }
-
-        // 댓글이 달린 게시글 정보 가져오기
-        PostDto post = communityService.getPost(comment.getPostId());
-        if (post == null) {
-            return ResponseEntity.status(404).body(Map.of("message", "게시글 없음"));
-        }
-
-        Long loginId = loginUser.getUserId();
-        boolean isCommentWriter = loginId.equals(comment.getUserId());
-        boolean isPostWriter = loginId.equals(post.getUserId());
-
-        // 🔥 댓글 작성자 또는 게시글 작성자만 삭제 가능
+        Long loginUserId = loginUser.getUserId();
+        boolean isCommentWriter = loginUserId.equals(comment.getUserId());
+        boolean isPostWriter = loginUserId.equals(post.getUserId());
         if (!isCommentWriter && !isPostWriter) {
-            return ResponseEntity.status(403).body(Map.of("message", "삭제 권한 없음"));
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "댓글 삭제 권한이 없습니다.");
         }
 
         communityService.deleteComment(commentId);
-        return ResponseEntity.ok(Map.of("message", "댓글 삭제 완료"));
+        return ResponseEntity.ok(Map.of("message", "댓글 삭제가 완료되었습니다."));
     }
 
-
-
-    /** ****************************************
-     * 8. 댓글 수정
-     ******************************************/
     @PutMapping("/comment")
-    public ResponseEntity<?> updateComment(
-            @RequestBody CommentDto dto,
-            HttpSession session) {
-
-        UserDto loginUser = (UserDto) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "로그인 필요"));
-        }
-
-        CommentDto origin = communityService.getComment(dto.getCommentId());
-        if (!origin.getUserId().equals(loginUser.getUserId())) {
-            return ResponseEntity.status(403).body(Map.of("message", "수정 권한 없음"));
-        }
+    public ResponseEntity<Map<String, String>> updateComment(@RequestBody CommentDto dto, HttpSession session) {
+        UserDto loginUser = sessionUserSupport.getRequiredUser(session);
+        CommentDto origin = requireComment(dto.getCommentId());
+        validateOwner(origin.getUserId(), loginUser.getUserId(), "댓글 수정 권한이 없습니다.");
 
         communityService.updateComment(dto);
-
-        return ResponseEntity.ok(Map.of("message", "댓글 수정 완료"));
+        return ResponseEntity.ok(Map.of("message", "댓글 수정이 완료되었습니다."));
     }
 
-
-    /** ****************************************
-     * 9. 좋아요 토글
-     ******************************************/
     @PostMapping("/like")
-    public ResponseEntity<?> like(
-            @RequestParam Long postId,
-            HttpSession session) {
-
-        UserDto loginUser = (UserDto) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "로그인 필요"));
-        }
-
-        boolean result = communityService.toggleLike(postId, loginUser.getUserId());
-
-        return ResponseEntity.ok(Map.of("liked", result));
+    public ResponseEntity<Map<String, Boolean>> like(@RequestParam Long postId, HttpSession session) {
+        UserDto loginUser = sessionUserSupport.getRequiredUser(session);
+        return ResponseEntity.ok(Map.of("liked", communityService.toggleLike(postId, loginUser.getUserId())));
     }
 
-
-    /** ****************************************
-     * 10. 스크랩 토글
-     ******************************************/
     @PostMapping("/scrap")
-    public ResponseEntity<?> scrap(
-            @RequestParam Long postId,
-            HttpSession session) {
-
-        UserDto loginUser = (UserDto) session.getAttribute("loginUser");
-        if (loginUser == null) {
-            return ResponseEntity.status(401).body(Map.of("message", "로그인 필요"));
-        }
-
-        boolean result = communityService.toggleScrap(postId, loginUser.getUserId());
-
-        return ResponseEntity.ok(Map.of("scrapped", result));
+    public ResponseEntity<Map<String, Boolean>> scrap(@RequestParam Long postId, HttpSession session) {
+        UserDto loginUser = sessionUserSupport.getRequiredUser(session);
+        return ResponseEntity.ok(Map.of("scrapped", communityService.toggleScrap(postId, loginUser.getUserId())));
     }
-    
-    /** ****************************************
-     * 11. 인기 게시글 1개 조회
-     ******************************************/
+
     @GetMapping("/top")
     public ResponseEntity<?> getTopPost() {
         PostDto post = communityService.getTopPost();
@@ -309,13 +177,33 @@ public class CommunityRestController {
             return ResponseEntity.ok().body(null);
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("title", post.getTitle());
-        result.put("writer", post.getWriterId());
-        result.put("likes", post.getLikeCount());
-        result.put("scraps", post.getScrapCount());
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(Map.of(
+                "title", post.getTitle(),
+                "writer", post.getWriterId(),
+                "likes", post.getLikeCount(),
+                "scraps", post.getScrapCount()
+        ));
     }
 
+    private PostDto requirePost(Long postId) {
+        PostDto post = communityService.getPost(postId);
+        if (post == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다.");
+        }
+        return post;
+    }
+
+    private CommentDto requireComment(Long commentId) {
+        CommentDto comment = communityService.getComment(commentId);
+        if (comment == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다.");
+        }
+        return comment;
+    }
+
+    private void validateOwner(Long ownerId, Long loginUserId, String message) {
+        if (!ownerId.equals(loginUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, message);
+        }
+    }
 }

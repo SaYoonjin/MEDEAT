@@ -1,195 +1,185 @@
 package com.medeat.medical.service.impl;
 
+import com.medeat.auth.domain.user.entity.User;
+import com.medeat.auth.domain.user.repository.UserRepository;
+import com.medeat.medical.domain.medication.entity.Medication;
+import com.medeat.medical.domain.medication.entity.MedicationLog;
+import com.medeat.medical.domain.medication.mapper.MedicationMapper;
+import com.medeat.medical.domain.medication.query.MedicationQueryRepository;
+import com.medeat.medical.domain.medication.repository.MedicationLogRepository;
+import com.medeat.medical.domain.medication.repository.MedicationRepository;
+import com.medeat.medical.dto.MedicationDto;
+import com.medeat.medical.dto.MedicationLogDto;
+import com.medeat.medical.service.MedicationService;
+import com.medeat.notification.feed.dto.NotificationFeedType;
+import com.medeat.notification.feed.service.NotificationFeedService;
+import com.medeat.notification.service.PushSubscriptionService;
+import com.medeat.notification.service.WebPushService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import com.medeat.medical.dao.MedicationDao;
-import com.medeat.medical.dto.MedicationDto;
-import com.medeat.medical.dto.MedicationLogDto;
-import com.medeat.medical.service.MedicationService;
-import com.medeat.notification.service.PushSubscriptionService;
-import com.medeat.notification.service.WebPushService;
-import com.medeat.notification.feed.service.NotificationFeedService;
-import com.medeat.notification.feed.dto.NotificationFeedType;
-
-
 @Service
+@Transactional(readOnly = true)
 public class MedicationServiceImpl implements MedicationService {
 
-    @Autowired
-    private MedicationDao medicationDao;
+    private static final Logger log = LoggerFactory.getLogger(MedicationServiceImpl.class);
 
-    @Autowired
-    private WebPushService webPushService;
+    private final MedicationRepository medicationRepository;
+    private final MedicationLogRepository medicationLogRepository;
+    private final UserRepository userRepository;
+    private final MedicationMapper medicationMapper;
+    private final MedicationQueryRepository medicationQueryRepository;
+    private final WebPushService webPushService;
+    private final PushSubscriptionService pushSubscriptionService;
+    private final NotificationFeedService notificationFeedService;
 
-    @Autowired
-    private PushSubscriptionService pushSubscriptionService;
-    
-    @Autowired
-    private NotificationFeedService notificationFeedService;
-
-
+    public MedicationServiceImpl(
+            MedicationRepository medicationRepository,
+            MedicationLogRepository medicationLogRepository,
+            UserRepository userRepository,
+            MedicationMapper medicationMapper,
+            MedicationQueryRepository medicationQueryRepository,
+            WebPushService webPushService,
+            PushSubscriptionService pushSubscriptionService,
+            NotificationFeedService notificationFeedService
+    ) {
+        this.medicationRepository = medicationRepository;
+        this.medicationLogRepository = medicationLogRepository;
+        this.userRepository = userRepository;
+        this.medicationMapper = medicationMapper;
+        this.medicationQueryRepository = medicationQueryRepository;
+        this.webPushService = webPushService;
+        this.pushSubscriptionService = pushSubscriptionService;
+        this.notificationFeedService = notificationFeedService;
+    }
 
     @Override
     public List<MedicationDto> getMedicationList(Long userId) {
-        return medicationDao.selectByUser(userId);
+        return medicationRepository.findByUserUserIdOrderByMedicationIdDesc(userId)
+                .stream()
+                .map(medicationMapper::toDto)
+                .toList();
     }
 
     @Override
     public MedicationDto getMedication(Long medicationId) {
-        return medicationDao.selectById(medicationId);
+        return medicationRepository.findById(medicationId)
+                .map(medicationMapper::toDto)
+                .orElse(null);
     }
 
     @Override
+    @Transactional
     public void addMedication(MedicationDto dto) {
-
-        // 중복 체크
         if (existsMedication(dto.getUserId(), dto.getDrugName())) {
             throw new IllegalArgumentException("이미 등록된 약입니다.");
         }
 
-        medicationDao.insertMedication(dto);
+        User user = getRequiredUser(dto.getUserId());
+        medicationRepository.save(medicationMapper.toEntity(dto, user));
     }
 
     @Override
+    @Transactional
     public void updateMedication(MedicationDto dto) {
-
-        // 중복 체크: 자기 자신 제외
-        int exists = medicationDao.existsByUserAndNameExcludingId(
-                dto.getUserId(),
-                dto.getDrugName(),
-                dto.getMedicationId()
-        );
-
-        if (exists > 0) {
+        if (medicationRepository.existsByUserUserIdAndDrugNameAndMedicationIdNot(
+                dto.getUserId(), dto.getDrugName(), dto.getMedicationId())) {
             throw new IllegalArgumentException("이미 같은 이름의 약이 존재합니다.");
         }
 
-        medicationDao.updateMedication(dto);
-        
-        // 🔔 종 알림: 약 복용 알림 설정 변경
+        Medication entity = medicationRepository.findById(dto.getMedicationId())
+                .orElseThrow(() -> new IllegalArgumentException("복약 정보를 찾을 수 없습니다."));
+
+        medicationMapper.apply(dto, entity);
         notificationFeedService.notify(
-        	    dto.getUserId(),
-        	    NotificationFeedType.MEDICATION_SETTING_CHANGED,
-        	    "DISEASE",
-        	    dto.getUserId()
-        	);
-
-
+                dto.getUserId(),
+                NotificationFeedType.MEDICATION_SETTING_CHANGED,
+                "DISEASE",
+                dto.getUserId()
+        );
     }
 
     @Override
+    @Transactional
     public void deleteMedication(Long medicationId) {
-        medicationDao.deleteMedication(medicationId);
+        medicationRepository.deleteById(medicationId);
     }
 
     @Override
     public List<MedicationLogDto> getTodayLogs(Long userId) {
-        return medicationDao.getTodayLogs(userId);
+        return medicationQueryRepository.findTodayLogs(userId);
     }
 
     @Override
+    @Transactional
     public void saveLog(Long userId, Long medicationId, int takenIndex) {
-        medicationDao.insertLog(userId, medicationId, takenIndex);
+        Medication medication = medicationRepository.findById(medicationId)
+                .orElseThrow(() -> new IllegalArgumentException("복약 정보를 찾을 수 없습니다."));
+
+        MedicationLog logEntity = new MedicationLog();
+        logEntity.setUser(getRequiredUser(userId));
+        logEntity.setMedication(medication);
+        logEntity.setTakenIndex(takenIndex);
+        medicationLogRepository.save(logEntity);
     }
 
-
-
-    /* -------------------------------------------------------------
-       🔔 1. 스케줄러가 매 분 실행 → 약 복용 시간인지 확인 후 알림 발송
-    ------------------------------------------------------------- */
     @Override
     public void checkAndSendMedicationAlarms() {
+        String nowTime = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+        List<MedicationDto> medications = getMedicationToAlert(nowTime);
 
-        String nowTime = LocalTime.now()
-                .format(DateTimeFormatter.ofPattern("HH:mm"));
-
-        List<MedicationDto> meds = getMedicationToAlert(nowTime);
-
-        for (MedicationDto med : meds) {
-
-            // 🔕 유저가 알림 OFF 했으면 skip
-            if (!pushSubscriptionService.isPushEnabled(med.getUserId())) {
+        for (MedicationDto medication : medications) {
+            if (!pushSubscriptionService.isPushEnabled(medication.getUserId())) {
                 continue;
             }
 
-            int doseIndex = getNextDoseIndex(med);
-
             try {
                 webPushService.sendMedicationNotification(
-                        med.getUserId(),
-                        med.getMedicationId(),
-                        doseIndex,
-                        "약 복용 알림 💊",
-                        med.getDrugName() + " 복용 시간입니다!"
+                        medication.getUserId(),
+                        medication.getMedicationId(),
+                        getNextDoseIndex(medication),
+                        "약 복용 알림",
+                        medication.getDrugName() + " 복용 시간입니다."
                 );
             } catch (Exception e) {
-                e.printStackTrace();
+                log.warn("Failed to send medication notification. medicationId={}, userId={}",
+                        medication.getMedicationId(), medication.getUserId(), e);
             }
         }
     }
 
-
-
-    /* -------------------------------------------------------------
-       🔔 2. nowTime 과 intakeTime 이 일치하는 약만 필터링
-    ------------------------------------------------------------- */
     @Override
     public List<MedicationDto> getMedicationToAlert(String nowTime) {
-
-        List<MedicationDto> all = medicationDao.selectAll();
-
-        return all.stream()
-                .filter(med -> {
-                    if (med.getIntakeTime() == null) return false;
-
-                    for (String t : med.getIntakeTime().split(",")) {
-                        if (nowTime.equals(t.trim())) {
-                            return true;
-                        }
-                    }
-                    return false;
-                })
-                .toList();
+        return medicationQueryRepository.findMedicationToAlert(nowTime);
     }
 
-
-
-    /* -------------------------------------------------------------
-       🔔 3. 다음 복용 회차 계산 (오늘 복용 기록 수 기반)
-    ------------------------------------------------------------- */
     @Override
     public int getNextDoseIndex(MedicationDto med) {
-
-        List<MedicationLogDto> logs =
-                medicationDao.getTodayLogsByMedication(med.getMedicationId());
-
-        int takenCount = logs.size();
-        return takenCount + 1;  // 1회차 → 2회차 → 3회차...
+        return medicationQueryRepository.findTodayLogsByMedication(med.getMedicationId()).size() + 1;
     }
-
-
-
-    /* -------------------------------------------------------------
-       기타 기능
-    ------------------------------------------------------------- */
 
     @Override
     public boolean existsMedication(Long userId, String drugName) {
-        return medicationDao.existsByUserAndName(userId, drugName) > 0;
-    }
-    
-    @Override
-    public List<MedicationLogDto> getLogs(
-            Long userId,
-            String startDate,
-            String endDate
-    ) {
-        return medicationDao.selectLogsByPeriod(userId, startDate, endDate);
+        return medicationRepository.existsByUserUserIdAndDrugName(userId, drugName);
     }
 
+    @Override
+    public List<MedicationLogDto> getLogs(Long userId, String startDate, String endDate) {
+        LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
+        LocalDateTime endExclusive = LocalDate.parse(endDate).plusDays(1).atStartOfDay();
+        return medicationQueryRepository.findLogsByPeriod(userId, start, endExclusive);
+    }
+
+    private User getRequiredUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    }
 }
