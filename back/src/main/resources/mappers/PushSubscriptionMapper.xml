@@ -55,19 +55,7 @@
         DELETE FROM push_subscription
         WHERE endpoint = #{endpoint}
     </delete>
-    
-    <update id="updatePushEnabled">
-	    UPDATE user
-	    SET push_enabled = #{enabled}
-	    WHERE user_id = #{userId}
-	</update>
-	
-	<select id="getPushEnabled" parameterType="long" resultType="int">
-	    SELECT push_enabled
-	    FROM user
-	    WHERE user_id = #{userId}
-	</select>
-    
+
     <update id="updateSubscription" parameterType="com.medeat.notification.dto.PushSubscriptionDto">
 	  UPDATE push_subscription
 	  SET

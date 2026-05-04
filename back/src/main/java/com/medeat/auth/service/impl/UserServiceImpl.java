@@ -66,13 +66,27 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void update(UserDto user) {
         if (user == null || user.getUserId() == null) {
-            throw new IllegalArgumentException("userId가 없습니다.");
+            throw new IllegalArgumentException("userId is required.");
         }
 
         User entity = userRepository.findById(user.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + user.getUserId()));
 
         userMapper.apply(user, entity);
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long userId) {
+        userRepository.deleteById(userId);
+    }
+
+    @Override
+    @Transactional
+    public void updatePushEnabled(Long userId, boolean enabled) {
+        User entity = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+        entity.setPushEnabled(enabled);
     }
 
     @Override

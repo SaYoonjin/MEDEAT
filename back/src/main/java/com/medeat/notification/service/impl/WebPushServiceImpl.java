@@ -1,8 +1,8 @@
 package com.medeat.notification.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.medeat.notification.dao.PushSubscriptionDao;
 import com.medeat.notification.dto.PushSubscriptionDto;
+import com.medeat.notification.service.PushSubscriptionService;
 import com.medeat.notification.service.WebPushService;
 import nl.martijndwars.webpush.Notification;
 import nl.martijndwars.webpush.PushService;
@@ -20,22 +20,25 @@ public class WebPushServiceImpl implements WebPushService {
     private static final Logger log = LoggerFactory.getLogger(WebPushServiceImpl.class);
 
     private final PushService pushService;
-    private final PushSubscriptionDao pushSubscriptionDao;
+    private final PushSubscriptionService pushSubscriptionService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public WebPushServiceImpl(PushService pushService, PushSubscriptionDao pushSubscriptionDao) {
+    public WebPushServiceImpl(
+            PushService pushService,
+            PushSubscriptionService pushSubscriptionService
+    ) {
         this.pushService = pushService;
-        this.pushSubscriptionDao = pushSubscriptionDao;
+        this.pushSubscriptionService = pushSubscriptionService;
     }
 
     @Override
     public void sendMedicationNotification(Long userId, Long medicationId, int doseIndex, String title, String body) {
-        if (pushSubscriptionDao.getPushEnabled(userId) != 1) {
+        if (!pushSubscriptionService.isPushEnabled(userId)) {
             return;
         }
 
         try {
-            List<PushSubscriptionDto> subscriptions = pushSubscriptionDao.selectByUserId(userId);
+            List<PushSubscriptionDto> subscriptions = pushSubscriptionService.getByUserId(userId);
             if (subscriptions == null || subscriptions.isEmpty()) {
                 return;
             }

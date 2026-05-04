@@ -18,6 +18,10 @@ public interface UserService {
     UserDto getUserByLoginId(String loginId);
 
 	void update(UserDto origin);
+
+	void delete(Long userId);
+
+	void updatePushEnabled(Long userId, boolean enabled);
 	
 	List<String> findLoginIdsByEmail(String email);
 

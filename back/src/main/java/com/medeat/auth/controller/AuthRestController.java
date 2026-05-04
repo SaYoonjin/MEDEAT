@@ -118,9 +118,8 @@ public class AuthRestController {
         UserDto loginUser = sessionUserSupport.getRequiredUser(session);
 
         boolean enabled = body.get("enabled") instanceof Boolean value ? value : true;
-        loginUser.setPushEnabled(enabled);
-        userService.update(loginUser);
-        sessionUserSupport.updateSessionUser(session, loginUser);
+        userService.updatePushEnabled(loginUser.getUserId(), enabled);
+        sessionUserSupport.updateSessionUser(session, userService.getUserById(loginUser.getUserId()));
 
         return ResponseEntity.ok(Map.of(
                 "message", "푸시 설정이 변경되었습니다.",

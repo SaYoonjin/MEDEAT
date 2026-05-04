@@ -17,10 +17,6 @@ public interface PushSubscriptionDao {
 
     void deleteByEndpoint(String endpoint);
 
-	void updatePushEnabled(Long userId, boolean enabled);
-	
-	int getPushEnabled(Long userId);
-	
-	void updateSubscription(PushSubscriptionDto dto);
+    void updateSubscription(PushSubscriptionDto dto);
 
 }
